@@ -56,49 +56,60 @@ def market_planner_node(state: MarketResearchState) -> Dict[str, Any]:
         })
     except Exception as exc:
         logger.error(f"[Planner Agent] LLM plan generation error: {exc}")
+        import re
+        extracted_names = [p.strip() for p in re.split(r'\b(?:vs|dan|and|versus)\b', topic, flags=re.IGNORECASE) if len(p.strip()) > 1]
+        if not extracted_names or len(extracted_names) == 1:
+            extracted_names = ["Pemain Dominan A", "Penantang Pasar B"] if language == "id" else ["Market Leader A", "Challenger B"]
+
         if language == "id":
             plan = ResearchPlan(
                 market_domain=topic,
-                competitors=[CompetitorFocus(name=topic, category="Sektor Pasar", core_value_prop="Objek utama riset intelijen pasar")],
+                competitors=[
+                    CompetitorFocus(name=cname, category="Pemain Kunci Industri", core_value_prop=f"Penyedia solusi di sektor {topic}")
+                    for cname in extracted_names[:3]
+                ],
                 subtasks=[
                     ResearchSubtask(
                         subtask_id="task_1",
                         focus_dimension="pricing_model",
-                        competitor_target=topic,
-                        search_queries=[f"{topic} pricing tiers cost", f"{topic} harga paket biaya"],
+                        competitor_target=extracted_names[0],
+                        search_queries=[f"{extracted_names[0]} harga paket biaya", f"{topic} model harga"],
                         expected_findings="Model penetapan harga dan batasan tier gratis"
                     ),
                     ResearchSubtask(
                         subtask_id="task_2",
                         focus_dimension="product_features",
-                        competitor_target=topic,
-                        search_queries=[f"{topic} key features architecture", f"{topic} fitur utama perbandingan"],
+                        competitor_target=extracted_names[0],
+                        search_queries=[f"{extracted_names[0]} fitur utama", f"{topic} perbandingan solusi"],
                         expected_findings="Perbandingan kapabilitas dan diferensiasi fitur utama"
                     )
                 ],
-                key_hypotheses=[f"{topic} memiliki posisi kompetitif yang kuat di industrinya."]
+                key_hypotheses=[f"{topic} memiliki dinamika kompetitif yang berkembang pesat."]
             )
         else:
             plan = ResearchPlan(
                 market_domain=topic,
-                competitors=[CompetitorFocus(name=topic, category="Market Sector", core_value_prop="Primary subject of analysis")],
+                competitors=[
+                    CompetitorFocus(name=cname, category="Industry Key Player", core_value_prop=f"Solution provider in {topic}")
+                    for cname in extracted_names[:3]
+                ],
                 subtasks=[
                     ResearchSubtask(
                         subtask_id="task_1",
                         focus_dimension="pricing_model",
-                        competitor_target=topic,
-                        search_queries=[f"{topic} pricing tiers cost", f"{topic} free tier limits"],
+                        competitor_target=extracted_names[0],
+                        search_queries=[f"{extracted_names[0]} pricing tiers cost", f"{topic} cost structure"],
                         expected_findings="Pricing models and subscription tiers"
                     ),
                     ResearchSubtask(
                         subtask_id="task_2",
                         focus_dimension="product_features",
-                        competitor_target=topic,
-                        search_queries=[f"{topic} key features architecture", f"{topic} alternatives comparison"],
+                        competitor_target=extracted_names[0],
+                        search_queries=[f"{extracted_names[0]} core features", f"{topic} comparison"],
                         expected_findings="Core feature comparison"
                     )
                 ],
-                key_hypotheses=[f"{topic} has competitive market positioning."]
+                key_hypotheses=[f"{topic} has rapidly evolving competitive dynamics."]
             )
 
     event_msg = (

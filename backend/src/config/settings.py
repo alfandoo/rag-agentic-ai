@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # LLM Settings
     gemini_api_key: str = Field(default="", description="Google Gemini API Key")
-    gemini_model: str = Field(default="gemini-3.5-flash", description="Gemini model name")
+    gemini_model: str = Field(default="gemini-3.1-flash-lite", description="Gemini model name")
 
     # Search APIs
     tavily_api_key: str = Field(default="", description="Tavily Search API key")

@@ -76,24 +76,23 @@ def fact_checker_node(state: MarketResearchState) -> Dict[str, Any]:
         })
     except Exception as exc:
         logger.warning(f"[Fact-Checker] LLM verification error ({exc}), applying deterministic audit.")
-        has_citations = len(citations) >= 2
-        has_evidence = len(evidence) >= 2
-        score = 85.0 if (has_citations and has_evidence) else 50.0
+        # If LLM verification fails, assign low confidence (25%) so it never pretends to be verified
+        score = 25.0
         if language == "id":
             verdict = VerificationVerdict(
-                is_valid=(score >= 80.0),
+                is_valid=False,
                 confidence_score=score,
-                critique="Audit otomatis: sumber data dan cakupan bukti faktual berhasil diverifikasi.",
-                missing_aspects=[] if score >= 80.0 else ["Perlu tambahan rincian paket harga dan umpan balik pengguna tervalidasi."],
-                retry_search_queries=[f"{topic} harga resmi paket", f"{topic} biaya transaksi"] if score < 80.0 else []
+                critique=f"Audit darurat: LLM tidak dapat dihubungi ({exc.__class__.__name__}), data belum terverifikasi penuh.",
+                missing_aspects=["Koneksi LLM terputus atau batas kuota tercapai, data perlu diaudit ulang."],
+                retry_search_queries=[f"{topic} profil kompetitor resmi", f"{topic} struktur harga"]
             )
         else:
             verdict = VerificationVerdict(
-                is_valid=(score >= 80.0),
+                is_valid=False,
                 confidence_score=score,
-                critique="Automated deterministic audit: verified source density and evidence coverage.",
-                missing_aspects=[] if score >= 80.0 else ["Additional pricing tier details and verified customer feedback required."],
-                retry_search_queries=[f"{topic} official pricing", f"{topic} transaction fees"] if score < 80.0 else []
+                critique=f"Emergency audit: LLM unreachable ({exc.__class__.__name__}), evidence unverified.",
+                missing_aspects=["LLM connection error or rate limit reached; evidence requires fresh audit."],
+                retry_search_queries=[f"{topic} official competitor profile", f"{topic} pricing structure"]
             )
 
     # =========================================================================
