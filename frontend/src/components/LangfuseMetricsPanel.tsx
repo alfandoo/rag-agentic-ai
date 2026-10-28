@@ -369,7 +369,7 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
                   <k.icon className={`w-3 h-3 ${k.color}`} />
                   {k.label}
                 </span>
-                <span className={`text-lg font-bold font-mono block ${k.color}`}>{k.value}</span>
+                <span className={`text-base sm:text-lg font-bold font-mono block break-all ${k.color}`}>{k.value}</span>
                 {k.sub && <span className="text-[10px] font-mono text-zinc-500 block truncate">{k.sub}</span>}
               </div>
             ))}
@@ -390,7 +390,7 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
                 <div className="space-y-2.5">
                   {(data.agents || []).map((a) => (
                     <div key={a.node} className="space-y-1">
-                      <div className="flex items-center justify-between font-mono text-[11px]">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 font-mono text-[11px]">
                         <span className="text-zinc-300 font-semibold">{AGENT_LABELS[a.node] || a.node}</span>
                         <span className="text-zinc-500">
                           {a.runs > 0
@@ -475,9 +475,9 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
                 ) : (
                   <>
                     {/* Header */}
-                    <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2">
-                      <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
-                        <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/60 pb-2">
+                      <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5 min-w-0">
+                        <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         {days === 1 ? L.activityHourly : days === 7 ? L.activity7d : L.activity30d}
                       </span>
                       <div className="flex items-center gap-2 font-mono text-[10px]">

@@ -236,7 +236,7 @@ export default function AboutPage() {
             {/* 4 Agent Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-5 rounded-2xl bg-zinc-900/90 border border-sky-900/40 hover:border-sky-500/60 transition-colors space-y-2 interactive-card">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold text-zinc-100 text-sm">
                     {ab.architecture.agent1Name}
                   </span>
@@ -250,7 +250,7 @@ export default function AboutPage() {
               </div>
 
               <div className="p-5 rounded-2xl bg-zinc-900/90 border border-indigo-900/40 hover:border-indigo-500/60 transition-colors space-y-2 interactive-card">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold text-zinc-100 text-sm">
                     {ab.architecture.agent2Name}
                   </span>
@@ -264,7 +264,7 @@ export default function AboutPage() {
               </div>
 
               <div className="p-5 rounded-2xl bg-zinc-900/90 border border-amber-900/40 hover:border-amber-500/60 transition-colors space-y-2 interactive-card">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold text-zinc-100 text-sm">
                     {ab.architecture.agent3Name}
                   </span>
@@ -278,7 +278,7 @@ export default function AboutPage() {
               </div>
 
               <div className="p-5 rounded-2xl bg-zinc-900/90 border border-emerald-900/40 hover:border-emerald-500/60 transition-colors space-y-2 interactive-card">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold text-zinc-100 text-sm">
                     {ab.architecture.agent4Name}
                   </span>
