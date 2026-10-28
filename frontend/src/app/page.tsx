@@ -45,6 +45,7 @@ function HomeContent() {
   const [isComplete, setIsComplete] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLimitError, setIsLimitError] = useState(false);
 
   // Agent State Artifacts
   const [currentNode, setCurrentNode] = useState<string | null>(null);
@@ -272,6 +273,7 @@ function HomeContent() {
     setReport(null);
     setIteration(1);
     setError(null);
+    setIsLimitError(false);
     setTopic("");
     setElapsedMs(0);
     setStageStartedOffset({});
@@ -455,15 +457,21 @@ function HomeContent() {
         }
         const limitMessage =
           language === "id"
-            ? "Batas limit riset sudah tercapai (5x per 5 jam). Coba lagi dalam 5 jam."
-            : "Research limit reached (5 runs per 5 hours). Try again in 5 hours.";
+            ? "Batas riset tercapai (5 riset per 5 jam). Silakan coba lagi nanti."
+            : "Research limit reached (5 runs per 5 hours). Please try again later.";
         const connectionMessage =
           language === "id"
             ? `Tidak dapat terhubung ke backend FastAPI. Pastikan server aktif di ${API_BASE_URL}.`
             : `Cannot connect to the FastAPI backend. Ensure the server is running at ${API_BASE_URL}.`;
         fetch(`${API_BASE_URL}/health`, { method: "GET" })
-          .then((health) => setError(health.ok ? limitMessage : connectionMessage))
-          .catch(() => setError(connectionMessage));
+          .then((health) => {
+            setIsLimitError(health.ok);
+            setError(health.ok ? limitMessage : connectionMessage);
+          })
+          .catch(() => {
+            setIsLimitError(false);
+            setError(connectionMessage);
+          });
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to initialize EventSource stream.");
@@ -587,15 +595,17 @@ function HomeContent() {
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
               <span>{error}</span>
             </div>
-            <button
-              onClick={() =>
-                startResearch(topic || "Cursor vs GitHub Copilot", 2)
-              }
-              className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
-            >
-              <RotateCcw className="w-3 h-3" />
-              {language === "id" ? "Coba Lagi" : "Retry"}
-            </button>
+            {!isLimitError && (
+              <button
+                onClick={() =>
+                  startResearch(topic || "Cursor vs GitHub Copilot", 2)
+                }
+                className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                {language === "id" ? "Coba Lagi" : "Retry"}
+              </button>
+            )}
           </div>
         )}
 
