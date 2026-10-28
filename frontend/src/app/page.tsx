@@ -24,7 +24,8 @@ import {
   Loader2,
   Sparkles,
   Info,
-  Activity
+  Activity,
+  X
 } from "lucide-react";
 
 interface SavedDossier {
@@ -136,6 +137,16 @@ function HomeContent() {
       });
     } catch {
       // Ignore quota errors
+    }
+  };
+
+  const removeHistoryItem = (idx: number) => {
+    const next = history.filter((_, i) => i !== idx);
+    setHistory(next);
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore
     }
   };
 
@@ -557,30 +568,43 @@ function HomeContent() {
                   topic.toLowerCase() === item.topic.toLowerCase() && !!report;
                 const itemScore = item.report?.confidence_score;
                 return (
-                  <button
+                  <div
                     key={idx}
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => loadFromHistory(item)}
-                    className={`inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-lg border cursor-pointer disabled:opacity-40 interactive-btn ${
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-mono pl-2.5 pr-1 py-1 rounded-lg border interactive-btn ${
                       isActive
                         ? "bg-zinc-800 text-zinc-100 border-emerald-500/50 font-medium shadow-xs"
                         : "bg-zinc-900/70 text-zinc-400 hover:text-zinc-200 border-zinc-800/80 hover:border-zinc-700"
                     }`}
                   >
-                    <span className="max-w-[130px] sm:max-w-[180px] truncate">{item.topic}</span>
-                    {itemScore !== undefined && (
-                      <span
-                        className={`text-[9px] px-1 py-0.2 rounded font-semibold ${
-                          itemScore >= VERIFIED_THRESHOLD
-                            ? "bg-emerald-950/60 text-emerald-400"
-                            : "bg-amber-950/60 text-amber-400"
-                        }`}
-                      >
-                        {itemScore.toFixed(0)}%
-                      </span>
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => loadFromHistory(item)}
+                      className="inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    >
+                      <span className="max-w-[130px] sm:max-w-[180px] truncate">{item.topic}</span>
+                      {itemScore !== undefined && (
+                        <span
+                          className={`text-[9px] px-1 py-0.2 rounded font-semibold ${
+                            itemScore >= VERIFIED_THRESHOLD
+                              ? "bg-emerald-950/60 text-emerald-400"
+                              : "bg-amber-950/60 text-amber-400"
+                          }`}
+                        >
+                          {itemScore.toFixed(0)}%
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => removeHistoryItem(idx)}
+                      aria-label="Delete"
+                      className="p-0.5 rounded text-zinc-500 hover:text-rose-400 cursor-pointer disabled:opacity-30"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
