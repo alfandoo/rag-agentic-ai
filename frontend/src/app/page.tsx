@@ -55,6 +55,7 @@ function HomeContent() {
   const [iteration, setIteration] = useState(1);
   const [history, setHistory] = useState<SavedDossier[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [stageStartedAt, setStageStartedAt] = useState<Record<string, number>>({});
 
   const runStartedAtRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -164,6 +165,7 @@ function HomeContent() {
     setError(null);
     setCurrentNode(null);
     setElapsedMs(0);
+    setStageStartedAt({});
     runStartedAtRef.current = null;
 
     // If plan was not saved in older history entries, synthesize it from competitor profiles
@@ -294,8 +296,10 @@ function HomeContent() {
     setVerification(null);
     setReport(null);
     setIteration(1);
-    runStartedAtRef.current = Date.now();
+    const startedAt = Date.now();
+    runStartedAtRef.current = startedAt;
     setElapsedMs(0);
+    setStageStartedAt({ planner: startedAt });
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -338,6 +342,15 @@ function HomeContent() {
         if (typeof statusData.elapsed_ms === "number") {
           setElapsedMs(statusData.elapsed_ms);
         }
+        const nextStage: Record<string, string> = {
+          planner: "researcher",
+          researcher: "fact_checker",
+          fact_checker: "writer"
+        };
+        const next = nextStage[statusData.node];
+        if (next) {
+          setStageStartedAt((prev) => ({ ...prev, [next]: Date.now() }));
+        }
         if (statusData.data?.iteration) {
           setIteration(statusData.data.iteration);
         }
@@ -349,6 +362,7 @@ function HomeContent() {
         latestPlan = planData;
         setPlan(planData);
         setCurrentNode("researcher");
+        setStageStartedAt((prev) => ({ ...prev, researcher: Date.now() }));
       });
 
       es.addEventListener("verification", (e) => {
@@ -356,6 +370,11 @@ function HomeContent() {
         const verData: VerificationVerdict = JSON.parse(e.data);
         latestVerdict = verData;
         setVerification(verData);
+        setCurrentNode(verData.is_valid ? "writer" : "researcher");
+        setStageStartedAt((prev) => ({
+          ...prev,
+          [verData.is_valid ? "writer" : "researcher"]: Date.now()
+        }));
       });
 
       es.addEventListener("report", (e) => {
@@ -365,6 +384,7 @@ function HomeContent() {
         hasReceivedReport = true;
         setReport(repData);
         setCurrentNode("writer");
+        setStageStartedAt((prev) => ({ ...prev, writer: prev.writer || Date.now() }));
 
         // Sync verification confidence score with the final synthesized report score
         if (typeof repData.confidence_score === "number") {
@@ -583,6 +603,7 @@ function HomeContent() {
             onStop={stopResearch}
             report={report}
             elapsedMs={elapsedMs}
+            stageStartedAt={stageStartedAt}
           />
         )}
 

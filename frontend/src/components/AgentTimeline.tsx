@@ -31,6 +31,7 @@ interface AgentTimelineProps {
   onStop?: () => void;
   report?: CompetitorReport | null;
   elapsedMs?: number;
+  stageStartedAt?: Record<string, number>;
 }
 
 const formatDuration = (ms: number): string => {
@@ -50,7 +51,8 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   isStopped = false,
   onStop,
   report,
-  elapsedMs = 0
+  elapsedMs = 0,
+  stageStartedAt = {}
 }) => {
   const { language, t } = useLanguage();
   const [showLogs, setShowLogs] = useState(true);
@@ -236,6 +238,8 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
           {STAGES.map((stage, idx) => {
             const status = getStageStatus(stage.id, idx);
+            const startedAt = stageStartedAt[stage.id];
+            const activeElapsed = startedAt ? Date.now() - startedAt : 0;
 
             return (
               <div
@@ -281,6 +285,8 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                 <p className="mt-1 font-mono text-[9px] text-zinc-500">
                   {status === "completed" && stageDurations[stage.id]
                     ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
+                    : status === "active" && startedAt
+                    ? `${t.pipeline.eta} ${stage.eta} · ${t.pipeline.elapsed} ${formatDuration(activeElapsed)}`
                     : `${t.pipeline.eta} ${stage.eta}`}
                 </p>
               </div>
