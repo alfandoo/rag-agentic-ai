@@ -1,217 +1,100 @@
-# 🚀 StratAgent: Autonomous Market & Competitor Intelligence System
+# StratAgent
 
-> **Production-Grade Multi-Agent System** with self-correcting research loops, in-memory ChromaDB RAG, cascading Tri-Search grounding, and real-time SSE streaming.
+Multi-agent research system that turns a market question into a sourced competitor briefing.
+
+Ask "Cursor vs Windsurf vs GitHub Copilot" and four agents plan the research, search and scrape the web, fact-check their own evidence, and write a report. Every claim links back to a source. A follow-up chat answers questions from the indexed sources.
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange?logo=langchain)](https://langchain.com)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
-[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-red)](https://trychroma.com)
-[![Google Gemini](https://img.shields.io/badge/Primary_LLM-Gemini_3.1-4285F4?logo=google)](https://aistudio.google.com)
-[![Groq](https://img.shields.io/badge/Fallback_LLM-Groq_Llama_3.3_70B-F55036)](https://groq.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
+## What it does
 
-## 📌 Executive Summary
+1. **Plan**: the planner splits the question into research subtasks.
+2. **Research**: the researcher searches (Google grounding, then Tavily, then DuckDuckGo), scrapes pages and indexes them in ChromaDB.
+3. **Check**: the fact-checker scores the evidence. Below 80% confidence, it sends the researcher back with targeted queries (up to 2 retries).
+4. **Write**: the writer produces the report. Unverified numbers are flagged, not invented.
 
-Modern product managers, market analysts, and founders spend dozens of hours manually auditing competitor pricing, feature matrices, user complaints, and release notes. 
+Progress streams to the browser over SSE. Reports export to Markdown and PDF.
 
-**StratAgent** is an autonomous multi-agent intelligence platform built with **LangGraph**, **ChromaDB**, and a **Dual-Provider LLM Failover Engine (Google Gemini + Groq Llama 3.3 70B)**. Given a market question (e.g., *"Cursor vs Windsurf vs GitHub Copilot"*), four specialized autonomous agents collaborate in a state machine to plan, gather, audit, and synthesize an executive-grade market briefing with verified source citations and an interactive **RAG-Grounded Follow-Up Chatbot**.
+## Design decisions
 
----
+- **Self-correcting loop, not a linear chain.** A LangGraph state machine routes back to research when evidence is weak.
+- **Dual LLM with failover.** Gemini is primary. Groq takes over on `429` or `503`.
+- **Typed handoffs.** Pydantic v2 models (`ResearchPlan`, `VerificationVerdict`, `CompetitorReport`) sit between agents, so a malformed LLM output fails fast instead of reaching the report.
+- **Guardrails before research.** Off-topic, jailbreak and raw-math requests are rejected before any search runs.
+- **Per-IP and global rate limits** on research runs and chat, since each run spends paid API quota.
 
-## 🏗️ System Architecture
+## Stack
 
-```mermaid
-flowchart TD
-    User([User / Browser UI]) -->|1. Submit Query| NextJS[Next.js 16 Frontend App]
-    NextJS -->|2. SSE Connection EventSource| FastAPI[FastAPI Backend Server]
-    
-    subgraph MultiAgentEngine [LangGraph Orchestration Engine]
-        Planner[1. Market Planner Node] -->|ResearchPlan Schema| Researcher[2. Intelligence Researcher]
-        
-        subgraph DataTools [Tool Layer & Context Gathering]
-            Researcher -->|Primary| Google[Google Search Grounding]
-            Researcher -->|Fallback 1| Tavily[Tavily Search API]
-            Researcher -->|Fallback 2| DDG[DuckDuckGo Zero-Key Search]
-            Researcher -->|Scrape & Clean| Scraper[Trafilatura / BeautifulSoup]
-            Scraper -->|Semantic Chunking| Chroma[(ChromaDB Vector Store)]
-            Chroma -->|Targeted RAG Retrieval| Researcher
-        end
-        
-        Researcher -->|Collected Evidence| FactChecker{3. Fact-Checker & Auditor}
-        
-        FactChecker -->|Score < 80% & Iteration < Max| Researcher
-        FactChecker -->|Score >= 80% Verified| Writer[4. Executive Writer Node]
-    end
-    
-    Writer -->|CompetitorReport Schema| FastAPI
-    FastAPI -->|Live Event Streaming: status, plan, report| NextJS
-    NextJS -->|3. Interactive Dashboard & Export PDF| User
-```
+Python 3.12, FastAPI, LangGraph, ChromaDB, Pydantic v2 · Next.js 16, TypeScript, Tailwind CSS · Gemini, Groq (GPT-OSS 120B) · Docker, Caddy · Langfuse (optional tracing)
 
----
+## Run it
 
-## 🔄 Self-Correction State Machine Flow
+Needs a Gemini key and a Groq key. Both have free tiers.
 
-Unlike linear LLM chains or consumer chatbots that hallucinate when data is missing, **StratAgent** enforces an audited feedback loop:
-
-```mermaid
-stateDiagram-v2
-    [*] --> Planner: User Query Received
-    Planner --> Researcher: 4-Dimension Subtasks Formulated
-    
-    state Researcher {
-        [*] --> TriSearch: Query Google/Tavily/DDG
-        TriSearch --> Ingestion: Scrape Top URLs
-        Ingestion --> ChromaRAG: Semantic Index & Similarity Search
-        ChromaRAG --> [*]
-    }
-    
-    Researcher --> FactChecker: Evaluate Gathered Evidence
-    
-    state FactChecker {
-        [*] --> ConfidenceAudit: Calculate Score (0-100)
-        ConfidenceAudit --> Decision
-    }
-    
-    FactChecker --> Researcher: [Score < 80% & Iterations < 2] Retry with Targeted Queries
-    FactChecker --> Writer: [Score >= 80% or Limit Reached] Approved
-    
-    Writer --> [*]: Synthesize Final CompetitorReport
-```
-
----
-
-## ✨ Production-Grade Engineering Highlights
-
-| Pillar | Engineering Implementation | Why It Matters for Production |
-| :--- | :--- | :--- |
-| **Dual-LLM Failover** | **Google Gemini** (`gemini-3.1-flash-lite`) ➡️ **Groq** (`openai/gpt-oss-120b`). | Automatic zero-downtime failover if primary LLM hits `429 Resource Exhausted` or `503` load spikes. |
-| **Strict Type Safety** | **Pydantic v2** models (`ResearchPlan`, `VerificationVerdict`, `CompetitorReport`). | Guarantees zero format corruption between agent handoffs. |
-| **Cascading Tri-Search** | Google Search Grounding ➡️ Tavily ➡️ DuckDuckGo fallback. | High search precision with zero-downtime tolerance when API quotas expire. |
-| **Topic-Scoped ChromaDB RAG** | **ChromaDB** with content-hash deduplication & 700-char semantic chunking. | Accumulates knowledge across retry loops and powers deep retrieval in the Follow-Up Chatbot. |
-| **Anti-Hallucination Audit** | Programmatic enforcement of `confidence_score >= 80.0%` & partial evidence warnings. | Prevents fabricated numbers and flags unverified metrics transparently to executives. |
-| **Bilingual & Interactive UX** | Full **Indonesian (`ID`) & English (`EN`)** localization, SSE streaming, & History persistence. | Executive dossier viewer with Markdown/PDF export and RAG-grounded follow-up chat. |
-
----
-
-## 📂 Project Structure
-
-```text
-rag-agentic-ai/
-├── backend/
-│   ├── src/
-│   │   ├── config/          # Pydantic Settings & environment variables
-│   │   ├── models/          # Schemas (Pydantic v2) and LangGraph State
-│   │   ├── tools/           # Tri-Search, Web Scraper, ChromaDB RAG
-│   │   ├── agents/          # Planner, Researcher, Fact-Checker, Writer
-│   │   ├── graph/           # LangGraph StateGraph & conditional routing
-│   │   └── api/             # FastAPI application & SSE endpoints
-│   ├── tests/               # 11 unit & integration tests (100% passing)
-│   ├── requirements.txt     # Python dependencies
-│   └── Dockerfile           # Backend container
-│
-├── frontend/                # Next.js 16 (App Router + Tailwind CSS)
-│   ├── src/
-│   │   ├── components/      # Navbar, TopicInput, AgentTimeline, ReportViewer
-│   │   ├── types/           # TypeScript interfaces matching backend models
-│   │   └── app/             # Main dashboard page consuming SSE stream
-│   ├── package.json
-│   └── Dockerfile           # Frontend container
-│
-├── docker-compose.yml       # 1-command container orchestration
-└── README.md                # Documentation & portfolio guide
-```
-
----
-
-## ⚡ Quickstart Guide
-
-### 1. Prerequisites
-- Python 3.12+
-- Node.js 20+
-- Google Gemini API Key ([Get free key here](https://aistudio.google.com/app/apikey))
-- Groq API Key for High-Throughput Fallback ([Get free key here](https://console.groq.com/keys))
-
-### 2. Environment Setup
-
-Clone repository and configure environment:
 ```bash
-# In backend directory
-cp backend/.env.example backend/.env
-```
-Edit `backend/.env` with your API keys:
-```env
-# Primary LLM Provider
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.1-flash-lite
-
-# Fallback LLM Provider (14,400 RPD Free Tier)
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=openai/gpt-oss-120b
-
-# Optional Search & Observability:
-TAVILY_API_KEY=your_tavily_key
-LANGFUSE_PUBLIC_KEY=your_langfuse_public_key
-LANGFUSE_SECRET_KEY=your_langfuse_secret_key
-```
-
-### 3. Running Locally
-
-#### Start the Backend (Terminal 1):
-```bash
-# From project root (f:\rag-agentic-ai):
-python backend/run.py
-```
-*Backend Swagger Docs: [http://localhost:8000/docs](http://localhost:8000/docs)*
-
-#### Start the Frontend (Terminal 2):
-```bash
-cd frontend
-npm install
-npm run dev
-```
-*Frontend Dashboard: [http://localhost:3000](http://localhost:3000)*
-
----
-
-### 4. Running with Docker Compose
-
-Deploy the entire stack in one command:
-```bash
+cp backend/.env.example backend/.env   # add GEMINI_API_KEY and GROQ_API_KEY
 docker compose up --build
 ```
 
----
-
-## 🧪 Automated Testing
-
-StratAgent includes an automated `pytest` suite covering data validation, topic-scoped ChromaDB vector store deduplication, search failover, LangGraph conditional routing, and FastAPI telemetry endpoints:
+Open http://localhost:3000. Or run without Docker:
 
 ```bash
-# Run tests from project root
+# terminal 1
+pip install -r backend/requirements.txt
+python backend/run.py
+
+# terminal 2
+cd frontend && npm install && npm run dev
+```
+
+API docs: http://localhost:8000/docs
+
+## Tests
+
+```bash
 pytest backend/tests/ -v
 ```
 
-**Results:**
-```text
-backend/tests/test_schemas.py::test_research_plan_schema PASSED
-backend/tests/test_schemas.py::test_verification_verdict_confidence_boundaries PASSED
-backend/tests/test_schemas.py::test_update_citations_deduplication PASSED
-backend/tests/test_tools.py::test_chunk_text PASSED
-backend/tests/test_tools.py::test_chroma_vector_store PASSED
-backend/tests/test_tools.py::test_duckduckgo_fallback_search PASSED
-backend/tests/test_graph.py::test_graph_compilation PASSED
-backend/tests/test_graph.py::test_conditional_loop_routing PASSED
-backend/tests/test_api.py::test_root_endpoint PASSED
-backend/tests/test_api.py::test_health_check_endpoint PASSED
-backend/tests/test_api.py::test_stream_endpoint_initialization PASSED
+42 tests cover schema validation, citation dedup, vector store caching, search fallback, scraper URL safety, graph routing, guardrails, rate limits, and the FastAPI endpoints (including SSE). Latest run: 42 passed.
 
-======================== 11 passed in 19.96s ========================
+## Configuration
+
+Key variables. The full list is in `backend/.env.example`.
+
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | — | Primary LLM (required) |
+| `GROQ_API_KEY` | — | Fallback LLM (required for failover) |
+| `TAVILY_API_KEY` | — | Optional search provider |
+| `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS origins |
+| `RESEARCH_RATE_LIMIT_PER_HOUR` | `5` | Research runs per IP per window |
+| `RESEARCH_RATE_LIMIT_PER_DAY` | `20` | Research runs per day, all IPs |
+| `CHAT_RATE_LIMIT_PER_HOUR` | `20` | Chat requests per IP per hour |
+
+Rate limits live in process memory. They reset on restart and don't sync across instances.
+
+## Production
+
+Single VPS, Docker Compose, Caddy for HTTPS. The backend has no public port. Steps are in [DEPLOY.md](DEPLOY.md).
+
+## Project layout
+
+```text
+backend/src/
+  agents/   planner, researcher, fact-checker, writer, guardrails, LLM failover
+  graph/    LangGraph workflow and routing
+  tools/    search, scraper, vector store, language detection
+  api/      FastAPI routes, rate limiting
+  models/   Pydantic schemas and graph state
+frontend/src/
+  app/         dashboard, /about, /observability
+  components/  AgentTimeline, ReportViewer, FollowUpChat, ...
 ```
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT. See [LICENSE](LICENSE).
