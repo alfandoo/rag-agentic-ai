@@ -121,6 +121,8 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
+        // sse-starlette uses CRLF; normalize so both formats parse.
+        buffer = buffer.replace(/\r\n/g, "\n");
         const events = buffer.split("\n\n");
         buffer = events.pop() || "";
 
