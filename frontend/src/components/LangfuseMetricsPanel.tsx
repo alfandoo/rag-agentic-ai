@@ -401,7 +401,7 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
                       </div>
                       <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-sky-500 to-amber-400"
+                          className="h-full rounded-full bg-sky-500"
                           style={{ width: `${a.runs > 0 ? Math.max(3, (a.latency_p95_ms / maxAgentP95) * 100) : 0}%` }}
                         />
                       </div>
