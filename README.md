@@ -4,6 +4,8 @@ Multi-agent research system that turns a market question into a sourced competit
 
 Ask "Cursor vs Windsurf vs GitHub Copilot" and four agents plan the research, search and scrape the web, fact-check their own evidence, and write a report. Every claim links back to a source. A follow-up chat answers questions from the indexed sources.
 
+**Live demo: https://stratagent.my.id/**
+
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange?logo=langchain)](https://langchain.com)
@@ -18,6 +20,28 @@ Ask "Cursor vs Windsurf vs GitHub Copilot" and four agents plan the research, se
 4. **Write**: the writer produces the report. Unverified numbers are flagged, not invented.
 
 Progress streams to the browser over SSE. Reports export to Markdown and PDF.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI[Next.js frontend] -->|SSE| API[FastAPI]
+    API --> Graph
+
+    subgraph Graph [LangGraph workflow]
+        P[Planner] --> R[Researcher]
+        R --> F{Fact-checker}
+        F -->|score < 80%| R
+        F -->|score >= 80%| W[Writer]
+    end
+
+    R --> Search[Google / Tavily / DuckDuckGo]
+    R --> Scrape[Scraper]
+    Scrape --> Chroma[(ChromaDB)]
+    Chroma --> R
+    Graph --> LLM[Gemini, failover to Groq]
+    API -.-> Langfuse[Langfuse, optional]
+```
 
 ## Design decisions
 
