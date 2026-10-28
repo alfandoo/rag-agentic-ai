@@ -54,7 +54,9 @@ function HomeContent() {
   const [report, setReport] = useState<CompetitorReport | null>(null);
   const [iteration, setIteration] = useState(1);
   const [history, setHistory] = useState<SavedDossier[]>([]);
+  const [elapsedMs, setElapsedMs] = useState(0);
 
+  const runStartedAtRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const isStoppedRef = useRef<boolean>(false);
   const activeTopicRef = useRef<string>("");
@@ -75,6 +77,17 @@ function HomeContent() {
 
   // Close an active research stream when the page unmounts
   useEffect(() => () => eventSourceRef.current?.close(), []);
+
+  // Live total run timer
+  useEffect(() => {
+    if (!isLoading || !runStartedAtRef.current) return;
+    const interval = setInterval(() => {
+      if (runStartedAtRef.current) {
+        setElapsedMs(Date.now() - runStartedAtRef.current);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   // Load saved dossiers from localStorage on client mount
   useEffect(() => {
@@ -150,6 +163,8 @@ function HomeContent() {
     setIsStopped(false);
     setError(null);
     setCurrentNode(null);
+    setElapsedMs(0);
+    runStartedAtRef.current = null;
 
     // If plan was not saved in older history entries, synthesize it from competitor profiles
     if (item.plan) {
@@ -248,6 +263,9 @@ function HomeContent() {
     setIsComplete(false);
     setIsStopped(true);
     setCurrentNode(null);
+    if (runStartedAtRef.current) {
+      setElapsedMs(Date.now() - runStartedAtRef.current);
+    }
     setEvents((prev) => [
       ...prev,
       {
@@ -276,6 +294,8 @@ function HomeContent() {
     setVerification(null);
     setReport(null);
     setIteration(1);
+    runStartedAtRef.current = Date.now();
+    setElapsedMs(0);
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -315,6 +335,9 @@ function HomeContent() {
         setCurrentNode(statusData.node);
         setEvents((prev) => [...prev, statusData]);
 
+        if (typeof statusData.elapsed_ms === "number") {
+          setElapsedMs(statusData.elapsed_ms);
+        }
         if (statusData.data?.iteration) {
           setIteration(statusData.data.iteration);
         }
@@ -362,9 +385,17 @@ function HomeContent() {
         saveToHistory(selectedTopic, repData, latestPlan, latestVerdict, [...accumulatedEvents]);
       });
 
-      es.addEventListener("complete", () => {
+      es.addEventListener("complete", (e) => {
         if (isStoppedRef.current || eventSourceRef.current !== es) return;
         isStreamFinished = true;
+        try {
+          const payload = JSON.parse(e.data);
+          if (typeof payload.elapsed_ms === "number") {
+            setElapsedMs(payload.elapsed_ms);
+          }
+        } catch {
+          // Keep the client-side elapsed timer when the payload is malformed
+        }
         es.close();
         setIsLoading(false);
         setIsComplete(true);
@@ -391,6 +422,9 @@ function HomeContent() {
 
         es.close();
         setIsLoading(false);
+        if (runStartedAtRef.current) {
+          setElapsedMs(Date.now() - runStartedAtRef.current);
+        }
         const limitMessage =
           language === "id"
             ? "Batas limit riset sudah tercapai (5x per 5 jam). Coba lagi dalam 5 jam."
@@ -548,6 +582,7 @@ function HomeContent() {
             isStopped={isStopped}
             onStop={stopResearch}
             report={report}
+            elapsedMs={elapsedMs}
           />
         )}
 

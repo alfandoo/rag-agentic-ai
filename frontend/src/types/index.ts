@@ -80,6 +80,8 @@ export interface StatusEvent {
   status: string;
   message: string;
   timestamp: string;
+  duration_ms?: number;
+  elapsed_ms?: number;
   data?: Record<string, any>;
 }
 

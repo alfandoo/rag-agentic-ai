@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Check,
   Loader2,
@@ -30,7 +30,15 @@ interface AgentTimelineProps {
   isStopped?: boolean;
   onStop?: () => void;
   report?: CompetitorReport | null;
+  elapsedMs?: number;
 }
+
+const formatDuration = (ms: number): string => {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+};
 
 export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   currentNode,
@@ -41,7 +49,8 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   isComplete,
   isStopped = false,
   onStop,
-  report
+  report,
+  elapsedMs = 0
 }) => {
   const { language, t } = useLanguage();
   const [showLogs, setShowLogs] = useState(true);
@@ -78,27 +87,44 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       id: "planner",
       stepNum: "01",
       label: t.pipeline.stages.planner.label,
-      role: t.pipeline.stages.planner.role
+      role: t.pipeline.stages.planner.role,
+      eta: t.pipeline.stages.planner.eta
     },
     {
       id: "researcher",
       stepNum: "02",
       label: t.pipeline.stages.researcher.label,
-      role: t.pipeline.stages.researcher.role
+      role: t.pipeline.stages.researcher.role,
+      eta: t.pipeline.stages.researcher.eta
     },
     {
       id: "fact_checker",
       stepNum: "03",
       label: t.pipeline.stages.fact_checker.label,
-      role: t.pipeline.stages.fact_checker.role
+      role: t.pipeline.stages.fact_checker.role,
+      eta: t.pipeline.stages.fact_checker.eta
     },
     {
       id: "writer",
       stepNum: "04",
       label: t.pipeline.stages.writer.label,
-      role: t.pipeline.stages.writer.role
+      role: t.pipeline.stages.writer.role,
+      eta: t.pipeline.stages.writer.eta
     }
   ];
+
+  const stageDurations = useMemo(() => {
+    const durations: Record<string, number> = {};
+    events.forEach((event) => {
+      if (
+        typeof event.duration_ms === "number" &&
+        ["planner", "researcher", "fact_checker", "writer"].includes(event.node)
+      ) {
+        durations[event.node] = event.duration_ms;
+      }
+    });
+    return durations;
+  }, [events]);
 
   const getStageStatus = (stageId: string, index: number) => {
     if (isComplete) return "completed";
@@ -136,8 +162,11 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       {/* Pipeline Status Bar */}
       <div className="bg-zinc-900/95 border border-zinc-800 rounded-2xl p-3.5 sm:p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800/80 mb-2.5 text-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-zinc-400">{t.pipeline.title}</span>
+            <span className="font-mono text-[10px] text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded-md border border-zinc-800">
+              {t.pipeline.totalTime}: {formatDuration(elapsedMs)}
+            </span>
             {isComplete ? (
               <span className="flex items-center gap-1 font-mono text-[11px] text-emerald-400 bg-emerald-950/40 px-2.5 py-0.5 rounded-md border border-emerald-800/40">
                 <CheckCircle2 className="w-3 h-3" />
@@ -248,6 +277,11 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                 </div>
                 <p className="text-[10px] text-zinc-400 leading-snug line-clamp-2 sm:line-clamp-none">
                   {stage.role}
+                </p>
+                <p className="mt-1 font-mono text-[9px] text-zinc-500">
+                  {status === "completed" && stageDurations[stage.id]
+                    ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
+                    : `${t.pipeline.eta} ${stage.eta}`}
                 </p>
               </div>
             );

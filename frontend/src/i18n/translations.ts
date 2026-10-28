@@ -30,6 +30,9 @@ export interface Translations {
     stepPrefix: string;
     confidence: string;
     loopPrefix: string;
+    totalTime: string;
+    eta: string;
+    actualTime: string;
     traceTitle: string;
     eventsCount: string;
     emptyTrace: string;
@@ -38,10 +41,10 @@ export interface Translations {
     blueprintHypotheses: string;
     blueprintSubtasks: string;
     stages: {
-      planner: { label: string; role: string };
-      researcher: { label: string; role: string };
-      fact_checker: { label: string; role: string };
-      writer: { label: string; role: string };
+      planner: { label: string; role: string; eta: string };
+      researcher: { label: string; role: string; eta: string };
+      fact_checker: { label: string; role: string; eta: string };
+      writer: { label: string; role: string; eta: string };
     };
   };
   report: {
@@ -286,6 +289,9 @@ export const translations: Record<Language, Translations> = {
       stepPrefix: "Step:",
       confidence: "Confidence:",
       loopPrefix: "Loop",
+      totalTime: "Total time",
+      eta: "ETA",
+      actualTime: "Done",
       traceTitle: "Execution Trace Log",
       eventsCount: "events",
       emptyTrace: "Awaiting pipeline execution...",
@@ -294,10 +300,10 @@ export const translations: Record<Language, Translations> = {
       blueprintHypotheses: "Key Hypotheses Under Test",
       blueprintSubtasks: "Targeted Search Subtasks",
       stages: {
-        planner: { label: "Planner", role: "Formulating dimensions" },
-        researcher: { label: "Researcher", role: "Tri-Search & ChromaDB" },
-        fact_checker: { label: "Fact-Checker", role: "Auditing & Confidence score" },
-        writer: { label: "Synthesizer", role: "Executive dossier compilation" }
+        planner: { label: "Planner", role: "Formulating dimensions", eta: "~5s" },
+        researcher: { label: "Researcher", role: "Tri-Search & ChromaDB", eta: "15–25s" },
+        fact_checker: { label: "Fact-Checker", role: "Auditing & Confidence score", eta: "3–5s" },
+        writer: { label: "Synthesizer", role: "Executive dossier compilation", eta: "8–12s" }
       }
     },
     report: {
@@ -623,6 +629,9 @@ export const translations: Record<Language, Translations> = {
       stepPrefix: "Langkah:",
       confidence: "Tingkat Keyakinan:",
       loopPrefix: "Siklus",
+      totalTime: "Total waktu",
+      eta: "ETA",
+      actualTime: "Selesai",
       traceTitle: "Catatan Jejak Eksekusi Agen",
       eventsCount: "catatan",
       emptyTrace: "Menunggu eksekusi riset dimulai...",
@@ -631,10 +640,10 @@ export const translations: Record<Language, Translations> = {
       blueprintHypotheses: "Hipotesis Utama yang Diuji",
       blueprintSubtasks: "Sub-Tugas Pencarian Terfokus",
       stages: {
-        planner: { label: "Perencana", role: "Memetakan dimensi riset" },
-        researcher: { label: "Periset", role: "Tri-Search & ChromaDB" },
-        fact_checker: { label: "Pemeriksa Fakta", role: "Audit & Skor Validitas" },
-        writer: { label: "Penyusun", role: "Sintesis berkas eksekutif" }
+        planner: { label: "Perencana", role: "Memetakan dimensi riset", eta: "~5 dtk" },
+        researcher: { label: "Periset", role: "Tri-Search & ChromaDB", eta: "15–25 dtk" },
+        fact_checker: { label: "Pemeriksa Fakta", role: "Audit & Skor Validitas", eta: "3–5 dtk" },
+        writer: { label: "Penyusun", role: "Sintesis berkas eksekutif", eta: "8–12 dtk" }
       }
     },
     report: {

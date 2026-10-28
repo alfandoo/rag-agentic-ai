@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from typing import Literal, Dict, Any, AsyncGenerator
 from langgraph.graph import StateGraph, START, END
 
@@ -154,17 +155,25 @@ async def stream_research_workflow(
 
     config = {"callbacks": callbacks} if callbacks else {}
 
-    # Stream graph updates node by node
+    # Stream graph updates node by node, measuring each stage and the whole run
+    run_started = time.perf_counter()
+    last_mark = run_started
     try:
         async for output in research_graph.astream(initial_state, config=config, stream_mode="updates"):
             if is_topic_cancelled(topic):
                 logger.info(f"[Workflow] Stop signal active for '{topic}'. Halting LangGraph stream.")
                 break
+            now = time.perf_counter()
+            duration_ms = int((now - last_mark) * 1000)
+            elapsed_ms = int((now - run_started) * 1000)
+            last_mark = now
             for node_name, node_update in output.items():
                 yield {
                     "node": node_name,
                     "update": node_update,
-                    "language": resolved_lang
+                    "language": resolved_lang,
+                    "duration_ms": duration_ms,
+                    "elapsed_ms": elapsed_ms
                 }
     finally:
         if callbacks:

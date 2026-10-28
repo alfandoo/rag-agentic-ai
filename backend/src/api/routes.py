@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import AsyncGenerator, List, Literal, Optional
 from fastapi import APIRouter, HTTPException, Query
@@ -158,6 +159,7 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
     effective_language = detect_language(topic, fallback_language=language)
     logger.info(f"[SSE Event Generator] Topic: '{topic}' | UI Lang: '{language}' -> Resolved: '{effective_language}'")
 
+    started_at = time.perf_counter()
     yield {
         "event": "start",
         "data": json.dumps({
@@ -168,7 +170,8 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
                 if effective_language == "id"
                 else f"Market Intelligence Pipeline initialized for '{topic}' [{effective_language.upper()}]"
             ),
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "elapsed_ms": 0
         })
     }
 
@@ -176,12 +179,19 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
         async for step in stream_research_workflow(topic=topic, max_iterations=max_iterations, language=effective_language):
             node_name = step.get("node", "unknown")
             update_data = step.get("update", {})
+            duration_ms = step.get("duration_ms")
+            elapsed_ms = step.get("elapsed_ms")
 
-            # 1. Stream granular status log events
+            # 1. Stream granular status log events with timing
             for status_event in update_data.get("status_updates", []):
+                enriched = dict(status_event)
+                if duration_ms is not None:
+                    enriched["duration_ms"] = duration_ms
+                if elapsed_ms is not None:
+                    enriched["elapsed_ms"] = elapsed_ms
                 yield {
                     "event": "status",
-                    "data": json.dumps(status_event)
+                    "data": json.dumps(enriched)
                 }
 
             # 2. Stream artifact-specific events based on node completion
@@ -225,7 +235,8 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
                     if effective_language == "id"
                     else "Market Intelligence Report generation complete."
                 ),
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "elapsed_ms": int((time.perf_counter() - started_at) * 1000)
             })
         }
         # Brief pause so browser EventSource can process 'complete' and close cleanly before server EOF
@@ -242,7 +253,8 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
             "data": json.dumps({
                 "status": "error",
                 "message": str(exc),
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "elapsed_ms": int((time.perf_counter() - started_at) * 1000)
             })
         }
 
