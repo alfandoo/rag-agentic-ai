@@ -635,7 +635,7 @@ function HomeContent() {
         )}
 
         {/* Active Research Live Progress Skeleton (While Running & Before Report Arrives) */}
-        {isLoading && !report && (
+        {isLoading && !report && events.length > 0 && (
           <div className="w-full max-w-4xl mx-auto bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 space-y-4 animate-slide-up shadow-lg print:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
