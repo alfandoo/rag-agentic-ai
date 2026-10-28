@@ -62,18 +62,13 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   stageStartedOffset = {}
 }) => {
   const { language, t } = useLanguage();
-  const [showLogs, setShowLogs] = useState(true);
-  const [showBlueprint, setShowBlueprint] = useState(false);
+  const [logsOpen, setLogsOpen] = useState<boolean | null>(null);
+  const [blueprintOpen, setBlueprintOpen] = useState<boolean | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-open blueprint when plan arrives during active run, then collapse when report finishes
-  useEffect(() => {
-    if (plan && !isComplete) {
-      setShowBlueprint(true);
-    } else if (isComplete) {
-      setShowBlueprint(false);
-    }
-  }, [plan, isComplete]);
+  // Derive auto-open/auto-collapse without setState inside effects
+  const showLogs = logsOpen ?? !isComplete;
+  const showBlueprint = blueprintOpen ?? Boolean(plan && !isComplete);
 
   // Auto-scroll trace logs as new events stream in
   useEffect(() => {
@@ -81,15 +76,6 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [events, showLogs]);
-
-  // Auto-collapse trace log once the full report finishes so the dossier takes center stage
-  useEffect(() => {
-    if (isComplete) {
-      setShowLogs(false);
-    } else {
-      setShowLogs(true);
-    }
-  }, [isComplete]);
 
   const STAGES = [
     {
@@ -333,7 +319,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
         <div className="bg-zinc-900/95 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
           <button
             type="button"
-            onClick={() => setShowBlueprint(!showBlueprint)}
+            onClick={() => setBlueprintOpen(!showBlueprint)}
             className="w-full px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800/60 flex items-center justify-between text-xs text-zinc-300 transition-colors cursor-pointer"
           >
             <div className="flex flex-wrap items-center gap-2 font-mono">
@@ -455,7 +441,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       <div className="bg-zinc-900/95 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
         <button
           type="button"
-          onClick={() => setShowLogs(!showLogs)}
+          onClick={() => setLogsOpen(!showLogs)}
           className="w-full px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800/60 flex items-center justify-between text-xs text-zinc-400 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-2 font-mono">
