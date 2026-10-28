@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Check,
   Loader2,
@@ -31,7 +31,6 @@ interface AgentTimelineProps {
   onStop?: () => void;
   report?: CompetitorReport | null;
   elapsedMs?: number;
-  stageStartedOffset?: Record<string, number>;
 }
 
 const formatDuration = (ms: number): string => {
@@ -39,24 +38,6 @@ const formatDuration = (ms: number): string => {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${seconds % 60}s`;
-};
-
-const STAGE_ETA_SECONDS: Record<string, number> = {
-  planner: 5,
-  researcher: 20,
-  fact_checker: 5,
-  writer: 10
-};
-
-const ETA_HISTORY_KEY = "stratagent.stageEtaSeconds";
-
-const readEtaHistory = (): Record<string, number> => {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(window.localStorage.getItem(ETA_HISTORY_KEY) || "{}");
-  } catch {
-    return {};
-  }
 };
 
 export const AgentTimeline: React.FC<AgentTimelineProps> = ({
@@ -69,13 +50,11 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   isStopped = false,
   onStop,
   report,
-  elapsedMs = 0,
-  stageStartedOffset = {}
+  elapsedMs = 0
 }) => {
   const { language, t } = useLanguage();
   const [logsOpen, setLogsOpen] = useState<boolean | null>(null);
   const [blueprintOpen, setBlueprintOpen] = useState<boolean | null>(null);
-  const [stageEtaHistory] = useState<Record<string, number>>(readEtaHistory);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Derive auto-open/auto-collapse without setState inside effects
@@ -95,52 +74,31 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       stepNum: "01",
       label: t.pipeline.stages.planner.label,
       role: t.pipeline.stages.planner.role,
-      eta: t.pipeline.stages.planner.eta
+      activity: t.pipeline.stages.planner.activity
     },
     {
       id: "researcher",
       stepNum: "02",
       label: t.pipeline.stages.researcher.label,
       role: t.pipeline.stages.researcher.role,
-      eta: t.pipeline.stages.researcher.eta
+      activity: t.pipeline.stages.researcher.activity
     },
     {
       id: "fact_checker",
       stepNum: "03",
       label: t.pipeline.stages.fact_checker.label,
       role: t.pipeline.stages.fact_checker.role,
-      eta: t.pipeline.stages.fact_checker.eta
+      activity: t.pipeline.stages.fact_checker.activity
     },
     {
       id: "writer",
       stepNum: "04",
       label: t.pipeline.stages.writer.label,
       role: t.pipeline.stages.writer.role,
-      eta: t.pipeline.stages.writer.eta
+      activity: t.pipeline.stages.writer.activity
     }
   ];
 
-  const stageDurations = useMemo(() => {
-    const durations: Record<string, number> = {};
-    events.forEach((event) => {
-      if (
-        typeof event.duration_ms === "number" &&
-        ["planner", "researcher", "fact_checker", "writer"].includes(event.node)
-      ) {
-        durations[event.node] = event.duration_ms;
-      }
-    });
-    return durations;
-  }, [events]);
-
-  useEffect(() => {
-    if (!isComplete) return;
-    const next = { ...readEtaHistory() };
-    Object.entries(stageDurations).forEach(([node, ms]) => {
-      if (STAGE_ETA_SECONDS[node] && ms > 0) next[node] = Math.round(ms / 1000);
-    });
-    window.localStorage.setItem(ETA_HISTORY_KEY, JSON.stringify(next));
-  }, [isComplete, stageDurations]);
 
   const getStageStatus = (stageId: string, index: number) => {
     if (isComplete) return "completed";
@@ -158,22 +116,6 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     return "pending";
   };
 
-  const getStageEstimate = (stageId: string) =>
-    stageEtaHistory[stageId] ?? STAGE_ETA_SECONDS[stageId] ?? 1;
-
-  const getRemainingSeconds = (stageId: string, status: string, elapsedSec: number) => {
-    if (status === "completed") return 0;
-    const estimate = getStageEstimate(stageId);
-    if (status !== "active") return estimate;
-    return elapsedSec < estimate ? estimate - elapsedSec : Math.max(5, estimate * 0.2);
-  };
-
-  const totalRemainingSec = STAGES.reduce((total, stage, idx) => {
-    const status = getStageStatus(stage.id, idx);
-    const offset = stageStartedOffset[stage.id];
-    const elapsedSec = offset !== undefined ? Math.max(0, elapsedMs - offset) / 1000 : 0;
-    return total + getRemainingSeconds(stage.id, status, elapsedSec);
-  }, 0);
 
   const getNodeBadgeStyle = (node: string) => {
     switch (node.toLowerCase()) {
@@ -200,11 +142,6 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             <span className="font-mono text-[10px] text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded-md border border-zinc-800">
               {t.pipeline.totalTime}: {formatDuration(elapsedMs)}
             </span>
-            {!isComplete && !isStopped && (
-              <span className="font-mono text-[10px] text-sky-300 bg-sky-950/40 px-2 py-0.5 rounded-md border border-sky-800/50">
-                {t.pipeline.eta}: ~{formatDuration(totalRemainingSec * 1000)}
-              </span>
-            )}
             {isComplete ? (
               <span className="flex items-center gap-1 font-mono text-[11px] text-emerald-400 bg-emerald-950/40 px-2.5 py-0.5 rounded-md border border-emerald-800/40">
                 <CheckCircle2 className="w-3 h-3" />
@@ -274,23 +211,12 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
           {STAGES.map((stage, idx) => {
             const status = getStageStatus(stage.id, idx);
-            const startedAt = stageStartedOffset[stage.id] !== undefined;
-            const activeElapsed = Math.max(0, elapsedMs - (stageStartedOffset[stage.id] || 0));
-            const estimateSeconds = getStageEstimate(stage.id);
-            const elapsedSeconds = activeElapsed / 1000;
-            const remainingSeconds = getRemainingSeconds(stage.id, status, startedAt ? elapsedSeconds : 0);
-            const progress =
+            const statusLabel =
               status === "completed"
-                ? 100
+                ? t.pipeline.actualTime
                 : status === "active"
-                ? Math.min(100, Math.max(4, Math.round((elapsedSeconds / estimateSeconds) * 100)))
-                : 0;
-            const timingLabel =
-              status === "completed" && stageDurations[stage.id]
-                ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
-                : status === "active" && startedAt
-                ? `${progress}% · ${t.pipeline.eta} ~${Math.ceil(remainingSeconds)}s`
-                : `${t.pipeline.eta} ${stage.eta}`;
+                ? stage.activity
+                : t.pipeline.waiting;
 
             return (
               <div
@@ -334,20 +260,8 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                   {stage.role}
                 </p>
                 <p className="mt-1 font-mono text-[9px] text-zinc-500">
-                  {timingLabel}
+                  {statusLabel}
                 </p>
-                <div className="mt-1.5 h-1 rounded-full bg-zinc-900 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      status === "completed"
-                        ? "bg-emerald-500"
-                        : status === "active"
-                        ? "bg-emerald-500"
-                        : "bg-zinc-800"
-                    }`}
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
               </div>
             );
           })}

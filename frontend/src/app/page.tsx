@@ -56,7 +56,7 @@ function HomeContent() {
   const [iteration, setIteration] = useState(1);
   const [history, setHistory] = useState<SavedDossier[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [stageStartedOffset, setStageStartedOffset] = useState<Record<string, number>>({});
+  const [, setStageStartedOffset] = useState<Record<string, number>>({});
 
   const runStartedAtRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -630,7 +630,6 @@ function HomeContent() {
             onStop={stopResearch}
             report={report}
             elapsedMs={elapsedMs}
-            stageStartedOffset={stageStartedOffset}
           />
         )}
 
