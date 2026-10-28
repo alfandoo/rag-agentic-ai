@@ -618,7 +618,7 @@ function HomeContent() {
         )}
 
         {/* Live Agent Timeline Tracker & Planner Blueprint */}
-        {(isLoading || events.length > 0 || plan) && (
+        {(events.length > 0 || plan) && (
           <AgentTimeline
             currentNode={currentNode}
             events={events}
