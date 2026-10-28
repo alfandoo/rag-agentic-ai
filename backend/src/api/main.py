@@ -24,6 +24,7 @@ if settings.rate_limit_enabled:
     app.add_middleware(
         RateLimitMiddleware,
         research_per_hour=settings.research_rate_limit_per_hour,
+        research_window_seconds=settings.research_rate_limit_window_hours * 3600,
         chat_per_hour=settings.chat_rate_limit_per_hour,
     )
 

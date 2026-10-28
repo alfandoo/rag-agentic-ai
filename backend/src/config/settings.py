@@ -41,7 +41,8 @@ class Settings(BaseSettings):
 
     # Abuse protection (in-memory, per process)
     rate_limit_enabled: bool = Field(default=True, description="Enable research/chat rate limits")
-    research_rate_limit_per_hour: int = Field(default=2, description="Research starts per IP per hour")
+    research_rate_limit_per_hour: int = Field(default=5, description="Research starts per IP per window")
+    research_rate_limit_window_hours: int = Field(default=5, description="Research rate-limit window in hours")
     research_rate_limit_per_day: int = Field(default=20, description="Research starts per day across all IPs")
     chat_rate_limit_per_hour: int = Field(default=20, description="Chat requests per IP per hour")
 

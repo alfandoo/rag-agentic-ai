@@ -391,11 +391,17 @@ function HomeContent() {
 
         es.close();
         setIsLoading(false);
-        setError(
+        const limitMessage =
           language === "id"
-            ? `Tidak dapat terhubung ke backend atau batas riset tercapai. Coba lagi nanti (server: ${API_BASE_URL}).`
-            : `Cannot reach the backend or the research limit was reached. Try again later (server: ${API_BASE_URL}).`
-        );
+            ? "Batas limit riset sudah tercapai (5x per 5 jam). Coba lagi dalam 5 jam."
+            : "Research limit reached (5 runs per 5 hours). Try again in 5 hours.";
+        const connectionMessage =
+          language === "id"
+            ? `Tidak dapat terhubung ke backend FastAPI. Pastikan server aktif di ${API_BASE_URL}.`
+            : `Cannot connect to the FastAPI backend. Ensure the server is running at ${API_BASE_URL}.`;
+        fetch(`${API_BASE_URL}/health`, { method: "GET" })
+          .then((health) => setError(health.ok ? limitMessage : connectionMessage))
+          .catch(() => setError(connectionMessage));
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to initialize EventSource stream.");

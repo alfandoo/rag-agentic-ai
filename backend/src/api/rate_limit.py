@@ -50,11 +50,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        research_per_hour: int = 2,
+        research_per_hour: int = 5,
+        research_window_seconds: int = 5 * 3600,
         chat_per_hour: int = 20,
     ):
         super().__init__(app)
-        self.research_ip = SlidingWindowLimiter(research_per_hour, 3600)
+        self.research_ip = SlidingWindowLimiter(research_per_hour, research_window_seconds)
         self.chat_ip = SlidingWindowLimiter(chat_per_hour, 3600)
 
     async def dispatch(self, request: Request, call_next):
