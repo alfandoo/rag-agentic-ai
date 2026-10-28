@@ -440,11 +440,7 @@ function HomeContent() {
           return;
         }
         // Ignore normal EOF closure after report/complete event has already arrived
-        if (
-          isStreamFinished ||
-          hasReceivedReport ||
-          es.readyState === EventSource.CLOSED
-        ) {
+        if (isStreamFinished || hasReceivedReport) {
           es.close();
           setIsLoading(false);
           setIsComplete(true);
