@@ -34,6 +34,7 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
   const threadContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -85,6 +86,7 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
 
     setMessages(newMessages);
     setInput("");
+    setChatError(null);
     setIsGenerating(true);
 
     // Placeholder for streaming assistant response
@@ -110,6 +112,20 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
       });
 
       if (!response.ok || !response.body) {
+        if (response.status === 429) {
+          const retry = response.headers.get("retry-after");
+          const message =
+            language === "id"
+              ? `Batas chat tercapai. Coba lagi${retry ? ` dalam ${retry} detik` : " nanti"}.`
+              : `Chat limit reached. Try again${retry ? ` in ${retry} seconds` : " later"}.`;
+          setChatError(message);
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: "assistant", content: message };
+            return updated;
+          });
+          return;
+        }
         throw new Error(`HTTP error: ${response.status}`);
       }
 
@@ -180,6 +196,19 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
           }),
           signal: controller.signal
         });
+        if (!fallbackRes.ok) {
+          const message =
+            language === "id"
+              ? "Batas chat tercapai atau server sedang sibuk. Coba lagi nanti."
+              : "Chat limit reached or the server is busy. Try again later.";
+          setChatError(message);
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: "assistant", content: message };
+            return updated;
+          });
+          return;
+        }
         const fallbackData = await fallbackRes.json();
         setMessages((prev) => {
           const updated = [...prev];
@@ -193,15 +222,14 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
         });
       } catch {
         if (controller.signal.aborted) return;
+        const message =
+          language === "id"
+            ? "Maaf, terjadi kesalahan saat menghubungi server backend."
+            : "Sorry, an error occurred while connecting to the backend server.";
+        setChatError(message);
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content:
-              language === "id"
-                ? "Maaf, terjadi kesalahan saat menghubungi server backend."
-                : "Sorry, an error occurred while connecting to the backend server."
-          };
+          updated[updated.length - 1] = { role: "assistant", content: message };
           return updated;
         });
       }
@@ -246,7 +274,10 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
             {messages.length > 0 && (
               <button
                 type="button"
-                onClick={() => setMessages([])}
+                onClick={() => {
+                  setMessages([]);
+                  setChatError(null);
+                }}
                 disabled={isGenerating}
                 className="flex items-center gap-1 font-mono text-[10px] text-zinc-400 hover:text-zinc-200 bg-zinc-950 hover:bg-zinc-800 px-2 py-1 rounded border border-zinc-800 transition-colors cursor-pointer"
               >
@@ -256,6 +287,12 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
             )}
           </div>
         </div>
+
+        {chatError && (
+          <div className="mx-3.5 sm:mx-4 mt-3 p-2.5 rounded-lg bg-rose-950/40 border border-rose-800/50 text-[11px] text-rose-200">
+            {chatError}
+          </div>
+        )}
 
         {/* Message Thread */}
         <div
