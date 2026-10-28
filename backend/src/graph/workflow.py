@@ -3,46 +3,33 @@ import re
 from typing import Literal, Dict, Any, AsyncGenerator
 from langgraph.graph import StateGraph, START, END
 
-from backend.src.models.state import MarketResearchState
+from backend.src.models.state import (
+    MarketResearchState,
+    clear_topic_cancelled,
+    is_topic_cancelled
+)
 from backend.src.agents.planner import market_planner_node
 from backend.src.agents.researcher import intelligence_researcher_node
 from backend.src.agents.fact_checker import fact_checker_node
 from backend.src.agents.writer import executive_writer_node
+from backend.src.tools.language import detect_language
 from backend.src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-INDONESIAN_MARKERS = {
-    "bandingkan", "analisis", "pasar", "harga", "fitur", "kelebihan", 
-    "kekurangan", "terbaik", "dan", "untuk", "antara", "bagaimana", 
-    "rekomendasi", "produk", "kompetitor", "ulasan", "kelemahan", "biaya"
-}
 
-
-def detect_language(topic: str, requested_lang: str = "en") -> str:
-    """
-    Detects language from explicit user selection OR prompt semantics.
-    If the requested language is 'id', or if the prompt clearly contains Indonesian keywords,
-    resolves to 'id'. Otherwise defaults to 'en'.
-    """
-    if requested_lang == "id":
-        return "id"
-
-    # Tokenize topic words and check for Indonesian markers
-    words = set(re.findall(r'\b\w+\b', topic.lower()))
-    if words.intersection(INDONESIAN_MARKERS):
-        logger.info(f"Detected Indonesian prompt semantics for topic: '{topic}' -> auto-resolving language to 'id'")
-        return "id"
-
-    return "en"
-
-
-def route_fact_checker(state: MarketResearchState) -> Literal["researcher", "writer"]:
+def route_fact_checker(state: MarketResearchState) -> str:
     """
     Conditional Edge Router for the self-correcting research loop.
+    If user cancelled the run, immediately routes to END.
     If Fact-Checker deems evidence insufficient (< 80%) AND iteration limit is not reached,
     routes back to Researcher. Otherwise, proceeds to Writer.
     """
+    topic = state.get("topic", "")
+    if is_topic_cancelled(topic):
+        logger.info(f"[LangGraph Router] Topic '{topic}' was cancelled by user -> routing to END.")
+        return END
+
     verdict = state.get("verification")
     iteration = state.get("iteration_count", 0)
     max_iterations = state.get("max_iterations", 2)
@@ -61,6 +48,17 @@ def route_fact_checker(state: MarketResearchState) -> Literal["researcher", "wri
     return "writer"
 
 
+def route_if_not_cancelled(next_node: str):
+    """Returns a router function that checks cancellation before transitioning to next_node."""
+    def _router(state: MarketResearchState) -> str:
+        topic = state.get("topic", "")
+        if is_topic_cancelled(topic):
+            logger.info(f"[LangGraph Router] Topic '{topic}' cancelled -> halting before '{next_node}'.")
+            return END
+        return next_node
+    return _router
+
+
 def create_market_research_graph() -> Any:
     """
     Assembles and compiles the full StateGraph for Market & Competitor Intelligence.
@@ -73,10 +71,18 @@ def create_market_research_graph() -> Any:
     graph_builder.add_node("fact_checker", fact_checker_node)
     graph_builder.add_node("writer", executive_writer_node)
 
-    # 2. Add Fixed Edges
+    # 2. Add Edges with Cancellation Guards between every stage
     graph_builder.add_edge(START, "planner")
-    graph_builder.add_edge("planner", "researcher")
-    graph_builder.add_edge("researcher", "fact_checker")
+    graph_builder.add_conditional_edges(
+        "planner",
+        route_if_not_cancelled("researcher"),
+        {"researcher": "researcher", END: END}
+    )
+    graph_builder.add_conditional_edges(
+        "researcher",
+        route_if_not_cancelled("fact_checker"),
+        {"fact_checker": "fact_checker", END: END}
+    )
 
     # 3. Add Conditional Self-Correction Edge
     graph_builder.add_conditional_edges(
@@ -84,7 +90,8 @@ def create_market_research_graph() -> Any:
         route_fact_checker,
         {
             "researcher": "researcher",
-            "writer": "writer"
+            "writer": "writer",
+            END: END
         }
     )
 
@@ -107,7 +114,8 @@ async def stream_research_workflow(
     Asynchronously executes the research graph and yields real-time state events
     as each node completes. Designed for FastAPI Server-Sent Events (SSE).
     """
-    resolved_lang = detect_language(topic, language)
+    resolved_lang = detect_language(topic, fallback_language=language)
+    clear_topic_cancelled(topic)
 
     initial_state: MarketResearchState = {
         "topic": topic,
@@ -127,23 +135,42 @@ async def stream_research_workflow(
     callbacks = []
     if settings.langfuse_public_key and settings.langfuse_secret_key:
         try:
-            from langfuse.callback import CallbackHandler
-            callbacks.append(CallbackHandler(
+            import os
+            os.environ["LANGFUSE_PUBLIC_KEY"] = settings.langfuse_public_key
+            os.environ["LANGFUSE_SECRET_KEY"] = settings.langfuse_secret_key
+            os.environ["LANGFUSE_BASE_URL"] = settings.langfuse_host
+            from langfuse import Langfuse
+            from langfuse.langchain import CallbackHandler
+            # Explicitly bind credentials to Langfuse singleton
+            Langfuse(
                 public_key=settings.langfuse_public_key,
                 secret_key=settings.langfuse_secret_key,
-                host=settings.langfuse_host
-            ))
-            logger.info("Langfuse observability callback registered.")
+                base_url=settings.langfuse_host
+            )
+            callbacks.append(CallbackHandler())
+            logger.info("Langfuse observability callback registered successfully.")
         except Exception as exc:
             logger.warning(f"Could not initialize Langfuse callback: {exc}")
 
     config = {"callbacks": callbacks} if callbacks else {}
 
     # Stream graph updates node by node
-    async for output in research_graph.astream(initial_state, config=config, stream_mode="updates"):
-        for node_name, node_update in output.items():
-            yield {
-                "node": node_name,
-                "update": node_update,
-                "language": resolved_lang
-            }
+    try:
+        async for output in research_graph.astream(initial_state, config=config, stream_mode="updates"):
+            if is_topic_cancelled(topic):
+                logger.info(f"[Workflow] Stop signal active for '{topic}'. Halting LangGraph stream.")
+                break
+            for node_name, node_update in output.items():
+                yield {
+                    "node": node_name,
+                    "update": node_update,
+                    "language": resolved_lang
+                }
+    finally:
+        if callbacks:
+            try:
+                import langfuse
+                langfuse.get_client().flush()
+                logger.info("[Workflow] Langfuse traces flushed successfully.")
+            except Exception as flush_exc:
+                logger.debug(f"[Workflow] Langfuse flush error: {flush_exc}")

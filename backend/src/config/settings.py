@@ -1,6 +1,6 @@
 import os
 from typing import List
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,9 +15,12 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    # LLM Settings
+    # LLM Settings (Primary: Gemini, Fallback: Groq)
     gemini_api_key: str = Field(default="", description="Google Gemini API Key")
     gemini_model: str = Field(default="gemini-3.1-flash-lite", description="Gemini model name")
+
+    groq_api_key: str = Field(default="", description="Groq API Key (Fallback provider)")
+    groq_model: str = Field(default="openai/gpt-oss-120b", description="Groq model name")
 
     # Search APIs
     tavily_api_key: str = Field(default="", description="Tavily Search API key")
@@ -25,7 +28,7 @@ class Settings(BaseSettings):
     # Observability (Langfuse)
     langfuse_public_key: str = Field(default="", description="Langfuse Public Key")
     langfuse_secret_key: str = Field(default="", description="Langfuse Secret Key")
-    langfuse_host: str = Field(default="https://cloud.langfuse.com", description="Langfuse Host URL")
+    langfuse_host: str = Field(default="http://localhost:3001", description="Langfuse Host URL")
 
     # ChromaDB Vector Store
     chroma_persist_directory: str = Field(default="./chroma_data", description="Local ChromaDB storage path")
@@ -39,6 +42,12 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @field_validator("langfuse_host")
+    @classmethod
+    def normalize_langfuse_host(cls, value: str) -> str:
+        # The Langfuse SDK falls back to Langfuse Cloud when no host is given.
+        return value.strip() or "http://localhost:3001"
 
 
 # Global singleton settings instance

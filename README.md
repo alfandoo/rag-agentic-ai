@@ -7,7 +7,8 @@
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange?logo=langchain)](https://langchain.com)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-red)](https://trychroma.com)
-[![Google Gemini](https://img.shields.io/badge/LLM-Gemini_Flash-4285F4?logo=google)](https://aistudio.google.com)
+[![Google Gemini](https://img.shields.io/badge/Primary_LLM-Gemini_3.1-4285F4?logo=google)](https://aistudio.google.com)
+[![Groq](https://img.shields.io/badge/Fallback_LLM-Groq_Llama_3.3_70B-F55036)](https://groq.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -16,7 +17,7 @@
 
 Modern product managers, market analysts, and founders spend dozens of hours manually auditing competitor pricing, feature matrices, user complaints, and release notes. 
 
-**StratAgent** is an autonomous multi-agent intelligence platform built with **LangGraph**, **ChromaDB**, and **Google Gemini**. Given a market question (e.g., *"Cursor vs Windsurf vs GitHub Copilot"*), four specialized autonomous agents collaborate in a state machine to plan, gather, audit, and synthesize an executive-grade market briefing with verified source citations.
+**StratAgent** is an autonomous multi-agent intelligence platform built with **LangGraph**, **ChromaDB**, and a **Dual-Provider LLM Failover Engine (Google Gemini + Groq Llama 3.3 70B)**. Given a market question (e.g., *"Cursor vs Windsurf vs GitHub Copilot"*), four specialized autonomous agents collaborate in a state machine to plan, gather, audit, and synthesize an executive-grade market briefing with verified source citations and an interactive **RAG-Grounded Follow-Up Chatbot**.
 
 ---
 
@@ -87,12 +88,12 @@ stateDiagram-v2
 
 | Pillar | Engineering Implementation | Why It Matters for Production |
 | :--- | :--- | :--- |
+| **Dual-LLM Failover** | **Google Gemini** (`gemini-3.1-flash-lite`) ➡️ **Groq** (`openai/gpt-oss-120b`). | Automatic zero-downtime failover if primary LLM hits `429 Resource Exhausted` or `503` load spikes. |
 | **Strict Type Safety** | **Pydantic v2** models (`ResearchPlan`, `VerificationVerdict`, `CompetitorReport`). | Guarantees zero format corruption between agent handoffs. |
 | **Cascading Tri-Search** | Google Search Grounding ➡️ Tavily ➡️ DuckDuckGo fallback. | High search precision with zero-downtime tolerance when API quotas expire. |
-| **In-Session RAG** | **ChromaDB** with recursive semantic text chunking. | Prevents LLM context overflow (*lost-in-the-middle*) when scraping multiple web pages. |
-| **Cyclical Self-Correction** | LangGraph `route_fact_checker` conditional edge. | Automatically detects and re-researches vague or missing pricing/feature data. |
-| **Real-time UX** | **FastAPI Server-Sent Events (SSE)** + **Next.js 16**. | Real-time agent status tracker and Perplexity-style thought visibility. |
-| **Observability** | Native **Langfuse** callback integration. | Real-time tracking of latency, token expenses, and execution traces. |
+| **Topic-Scoped ChromaDB RAG** | **ChromaDB** with content-hash deduplication & 700-char semantic chunking. | Accumulates knowledge across retry loops and powers deep retrieval in the Follow-Up Chatbot. |
+| **Anti-Hallucination Audit** | Programmatic enforcement of `confidence_score >= 80.0%` & partial evidence warnings. | Prevents fabricated numbers and flags unverified metrics transparently to executives. |
+| **Bilingual & Interactive UX** | Full **Indonesian (`ID`) & English (`EN`)** localization, SSE streaming, & History persistence. | Executive dossier viewer with Markdown/PDF export and RAG-grounded follow-up chat. |
 
 ---
 
@@ -132,6 +133,7 @@ rag-agentic-ai/
 - Python 3.12+
 - Node.js 20+
 - Google Gemini API Key ([Get free key here](https://aistudio.google.com/app/apikey))
+- Groq API Key for High-Throughput Fallback ([Get free key here](https://console.groq.com/keys))
 
 ### 2. Environment Setup
 
@@ -142,10 +144,15 @@ cp backend/.env.example backend/.env
 ```
 Edit `backend/.env` with your API keys:
 ```env
+# Primary LLM Provider
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.1-flash-lite
 
-# Optional:
+# Fallback LLM Provider (14,400 RPD Free Tier)
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-120b
+
+# Optional Search & Observability:
 TAVILY_API_KEY=your_tavily_key
 LANGFUSE_PUBLIC_KEY=your_langfuse_public_key
 LANGFUSE_SECRET_KEY=your_langfuse_secret_key
@@ -155,11 +162,8 @@ LANGFUSE_SECRET_KEY=your_langfuse_secret_key
 
 #### Start the Backend (Terminal 1):
 ```bash
-# Dari folder root project (f:\rag-agentic-ai):
-python -m uvicorn backend.src.api.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Atau jika Anda sedang berada di dalam folder backend/:
-python run.py
+# From project root (f:\rag-agentic-ai):
+python backend/run.py
 ```
 *Backend Swagger Docs: [http://localhost:8000/docs](http://localhost:8000/docs)*
 
@@ -184,12 +188,11 @@ docker compose up --build
 
 ## 🧪 Automated Testing
 
-StratAgent includes 11 automated test suites covering data validation, vector store operations, search failover, graph routing, and API endpoints:
+StratAgent includes an automated `pytest` suite covering data validation, topic-scoped ChromaDB vector store deduplication, search failover, LangGraph conditional routing, and FastAPI telemetry endpoints:
 
 ```bash
 # Run tests from project root
-$env:PYTHONPATH="."
-python -m pytest backend/tests/ -v
+pytest backend/tests/ -v
 ```
 
 **Results:**

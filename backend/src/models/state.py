@@ -1,5 +1,6 @@
 import operator
-from typing import TypedDict, Annotated, List, Optional, Dict, Any
+import threading
+from typing import TypedDict, Annotated, List, Optional, Dict, Any, Set
 from backend.src.models.schemas import (
     ResearchPlan,
     ExtractedEvidence,
@@ -7,6 +8,37 @@ from backend.src.models.schemas import (
     VerificationVerdict,
     CompetitorReport
 )
+
+# Thread-safe registry of cancelled research topics / run IDs
+_cancelled_topics_lock = threading.Lock()
+_cancelled_topics: Set[str] = set()
+
+
+def mark_topic_cancelled(topic: str) -> None:
+    """Marks a research topic (or all active topics if '*' is passed) as cancelled."""
+    with _cancelled_topics_lock:
+        if not topic or topic.strip() == "*":
+            _cancelled_topics.add("*")
+        else:
+            _cancelled_topics.add(topic.strip().lower())
+
+
+def clear_topic_cancelled(topic: str) -> None:
+    """Clears cancellation flag when a new research run starts for a topic."""
+    with _cancelled_topics_lock:
+        _cancelled_topics.discard("*")
+        if topic:
+            _cancelled_topics.discard(topic.strip().lower())
+
+
+def is_topic_cancelled(topic: str) -> bool:
+    """Returns True if the user requested to stop the research run for this topic."""
+    with _cancelled_topics_lock:
+        if "*" in _cancelled_topics:
+            return True
+        if not topic:
+            return False
+        return topic.strip().lower() in _cancelled_topics
 
 
 def update_citations(existing: List[SourceCitation], new: List[SourceCitation]) -> List[SourceCitation]:

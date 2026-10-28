@@ -2,15 +2,34 @@
 
 :root {
   --background: #09090b;
-  --foreground: #ededed;
+  --foreground: #f4f4f5;
 }
 
+html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  width: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch friendly momentum scrolling */
+.touch-pan-x {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* Hide scrollbar utility for sleek horizontal tab swipe */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Crisp technical scrollbars */
@@ -30,4 +49,431 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
+}
+
+/* Clean Markdown Typography (no external plugin required) */
+.markdown-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.7;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.35rem;
+  line-height: 1.65;
+}
+
+.markdown-content strong {
+  color: #f4f4f5;
+  font-weight: 600;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  color: #f4f4f5;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.85em;
+  background: #18181b;
+  border: 1px solid #27272a;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  color: #e4e4e7;
+}
+
+.markdown-content blockquote {
+  border-left: 2px solid #3f3f46;
+  padding-left: 0.85rem;
+  color: #a1a1aa;
+  font-style: italic;
+  margin: 0.75rem 0;
+}
+
+/* Subtle top ambient glow for production dashboard feel */
+.bg-ambient-glow {
+  background-image: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    rgba(16, 185, 129, 0.07),
+    rgba(9, 9, 11, 0)
+  );
+}
+
+/* =========================================================================
+   Smooth Motion & Micro-Interactions System (Linear / Apple Easing)
+   ========================================================================= */
+
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.35);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s var(--ease-out-expo) forwards;
+}
+
+.animate-slide-up {
+  animation: fadeSlideUp 0.45s var(--ease-out-expo) forwards;
+}
+
+.animate-slide-down {
+  animation: fadeSlideDown 0.4s var(--ease-out-expo) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.35s var(--ease-out-expo) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+.shimmer-effect {
+  background: linear-gradient(
+    90deg,
+    rgba(39, 39, 42, 0.4) 0%,
+    rgba(63, 63, 70, 0.8) 50%,
+    rgba(39, 39, 42, 0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite ease-in-out;
+}
+
+/* Smooth Interactive Card & Button Polish */
+.interactive-card {
+  transition: transform 0.25s var(--ease-out-expo), border-color 0.25s var(--ease-out-expo), box-shadow 0.25s var(--ease-out-expo), background-color 0.25s var(--ease-out-expo);
+}
+
+.interactive-card:hover {
+  transform: translateY(-2px);
+}
+
+.interactive-card:active {
+  transform: scale(0.99);
+}
+
+.interactive-btn {
+  transition: transform 0.2s var(--ease-out-expo), background-color 0.2s var(--ease-out-expo), border-color 0.2s var(--ease-out-expo), box-shadow 0.2s var(--ease-out-expo);
+}
+
+.interactive-btn:hover {
+  transform: translateY(-1px);
+}
+
+.interactive-btn:active {
+  transform: scale(0.97);
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Print / Save as PDF Optimization (Executive Easy-Reading Stylesheet) */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm 14mm 16mm 14mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10.5pt !important;
+    line-height: 1.55 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Reset dark backgrounds to crisp white / light gray for executive PDF output */
+  .bg-zinc-950,
+  .bg-zinc-950\/90,
+  .bg-zinc-950\/80,
+  .bg-zinc-950\/70,
+  .bg-zinc-950\/60,
+  .bg-zinc-950\/30,
+  .bg-zinc-900,
+  .bg-zinc-900\/95,
+  .bg-zinc-900\/90,
+  .bg-zinc-900\/70,
+  .bg-zinc-900\/60,
+  .bg-zinc-800,
+  .bg-zinc-800\/80 {
+    background-color: #ffffff !important;
+  }
+
+  /* Distinct color-coded highlight boxes for easy scanning */
+  .bg-indigo-950\/15 {
+    background-color: #eef2ff !important;
+    border-color: #c7d2fe !important;
+  }
+
+  .bg-sky-950\/15,
+  .bg-sky-950\/70 {
+    background-color: #f0f9ff !important;
+    border-color: #bae6fd !important;
+  }
+
+  .bg-emerald-950\/15,
+  .bg-emerald-950\/40,
+  .bg-emerald-950\/60,
+  .bg-emerald-950\/70 {
+    background-color: #f0fdf4 !important;
+    border-color: #bbf7d0 !important;
+  }
+
+  .bg-rose-950\/15,
+  .bg-rose-950\/60,
+  .bg-rose-950\/70 {
+    background-color: #fff1f2 !important;
+    border-color: #fecdd3 !important;
+  }
+
+  .bg-amber-950\/30,
+  .bg-amber-950\/60,
+  .bg-amber-950\/70 {
+    background-color: #fffbeb !important;
+    border-color: #fde68a !important;
+  }
+
+  /* High-contrast readable dark typography for PDF */
+  .text-zinc-100,
+  .text-zinc-200,
+  .text-zinc-300,
+  .markdown-content,
+  .markdown-content p,
+  .markdown-content strong,
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4 {
+    color: #0f172a !important;
+  }
+
+  .text-zinc-400,
+  .text-zinc-500 {
+    color: #334155 !important;
+  }
+
+  /* Accent semantic labels darkened for white paper legibility */
+  .text-emerald-400,
+  .text-emerald-300 {
+    color: #047857 !important;
+    font-weight: 600 !important;
+  }
+
+  .text-sky-400,
+  .text-sky-300 {
+    color: #0369a1 !important;
+    font-weight: 600 !important;
+  }
+
+  .text-indigo-400,
+  .text-indigo-300 {
+    color: #4338ca !important;
+    font-weight: 600 !important;
+  }
+
+  .text-amber-400,
+  .text-amber-300,
+  .text-amber-200\/90,
+  .text-amber-200\/85,
+  .text-amber-200\/80 {
+    color: #b45309 !important;
+    font-weight: 600 !important;
+  }
+
+  .text-rose-400,
+  .text-rose-300 {
+    color: #be123c !important;
+    font-weight: 600 !important;
+  }
+
+  /* Crisp light borders for cards, tables, and badges */
+  .border-zinc-900,
+  .border-zinc-800,
+  .border-zinc-800\/90,
+  .border-zinc-800\/80,
+  .border-zinc-800\/70,
+  .border-zinc-800\/60,
+  .border-zinc-700,
+  .border-zinc-700\/80,
+  .border-indigo-900\/35,
+  .border-sky-900\/35,
+  .border-sky-900\/40,
+  .border-emerald-900\/30,
+  .border-emerald-900\/40,
+  .border-emerald-800\/60,
+  .border-rose-900\/30,
+  .border-rose-900\/40,
+  .border-rose-800\/50,
+  .border-amber-900\/40,
+  .border-amber-800\/50,
+  .border-amber-800\/60 {
+    border-color: #cbd5e1 !important;
+  }
+
+  .divide-zinc-800\/70 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Table print adjustments: full width, zebra striping, clear header */
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto !important;
+    font-size: 10pt !important;
+    border-collapse: collapse !important;
+    margin: 8px 0 !important;
+  }
+
+  th,
+  td {
+    position: static !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 7px 10px !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    line-height: 1.45 !important;
+  }
+
+  thead th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    border-bottom: 2px solid #94a3b8 !important;
+  }
+
+  tbody tr:nth-child(even) td {
+    background-color: #f8fafc !important;
+  }
+
+  tbody tr:nth-child(odd) td {
+    background-color: #ffffff !important;
+  }
+
+  /* Markdown prose styling in print */
+  .markdown-content p {
+    margin-bottom: 7px !important;
+    line-height: 1.6 !important;
+  }
+
+  .markdown-content strong {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    padding-left: 20px !important;
+    margin-bottom: 7px !important;
+  }
+
+  .markdown-content li {
+    margin-bottom: 3px !important;
+  }
+
+  /* Clean page breaks between major chapters */
+  .print\:break-before-page,
+  .print-break-before-page {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  /* Avoid breaking individual cards or SWOT quadrants in half */
+  .print-card,
+  .print\:break-inside-avoid {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
 }

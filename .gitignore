@@ -27,6 +27,8 @@ htmlcov/
 # Chroma & Local DBs
 chroma_data/
 *.sqlite3
+*.cache.json
+.langfuse_metrics_cache.json
 
 # Node.js / Next.js
 frontend/node_modules/

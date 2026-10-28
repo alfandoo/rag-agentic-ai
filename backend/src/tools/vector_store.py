@@ -1,12 +1,29 @@
 import os
-import uuid
+import re
+import hashlib
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import chromadb
-from chromadb.config import Settings as ChromaSettings
 from backend.src.config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Shared process-wide ChromaDB clients so connections are reused safely across threads
+_SHARED_EPHEMERAL_CLIENT: Optional[Any] = None
+_SHARED_PERSISTENT_CLIENT: Optional[Any] = None
+
+
+def get_topic_collection_name(topic: str) -> str:
+    """
+    Generates a deterministic, ChromaDB-compliant collection name (3-63 chars, alphanumeric/underscore)
+    for a given research topic so that multi-loop iterations and follow-up RAG chat share the same index.
+    """
+    cleaned = (topic or "default").strip().lower()
+    slug = re.sub(r"[^a-z0-9]+", "_", cleaned).strip("_")[:32]
+    if not slug:
+        slug = "market_topic"
+    digest = hashlib.md5(cleaned.encode("utf-8")).hexdigest()[:8]
+    return f"rag_{slug}_{digest}"
 
 
 def chunk_text(text: str, chunk_size: int = 700, chunk_overlap: int = 100) -> List[str]:
@@ -16,7 +33,9 @@ def chunk_text(text: str, chunk_size: int = 700, chunk_overlap: int = 100) -> Li
     """
     if not text:
         return []
-    
+
+    # Guard against a zero/negative step in the character-window loop below
+    chunk_overlap = max(0, min(chunk_overlap, chunk_size - 1))
     paragraphs = text.split("\n\n")
     chunks: List[str] = []
     current_chunk = ""
@@ -51,19 +70,29 @@ def chunk_text(text: str, chunk_size: int = 700, chunk_overlap: int = 100) -> Li
 
 class ResearchVectorStore:
     """
-    ChromaDB-backed Vector Store for in-session RAG.
+    ChromaDB-backed Vector Store for in-session and cross-turn RAG.
     Indexes scraped web content to allow targeted sub-question answering
-    without overflowing the LLM context window.
+    and grounded follow-up chat without overflowing the LLM context window.
     """
 
-    def __init__(self, in_memory: bool = True, collection_name: Optional[str] = None):
-        self.collection_name = collection_name or settings.chroma_collection_name
+    def __init__(self, in_memory: bool = False, collection_name: Optional[str] = None, topic: Optional[str] = None):
+        global _SHARED_EPHEMERAL_CLIENT, _SHARED_PERSISTENT_CLIENT
+        self.in_memory = in_memory
+        if topic and not collection_name:
+            self.collection_name = get_topic_collection_name(topic)
+        else:
+            self.collection_name = collection_name or settings.chroma_collection_name
         
         if in_memory:
-            self.client = chromadb.EphemeralClient()
+            if _SHARED_EPHEMERAL_CLIENT is None:
+                _SHARED_EPHEMERAL_CLIENT = chromadb.EphemeralClient()
+            self.client = _SHARED_EPHEMERAL_CLIENT
         else:
-            os.makedirs(settings.chroma_persist_directory, exist_ok=True)
-            self.client = chromadb.PersistentClient(path=settings.chroma_persist_directory)
+            if _SHARED_PERSISTENT_CLIENT is None:
+                os.makedirs(settings.chroma_persist_directory, exist_ok=True)
+                _SHARED_PERSISTENT_CLIENT = chromadb.PersistentClient(path=settings.chroma_persist_directory)
+                logger.info(f"Initialized persistent ChromaDB storage at: {os.path.abspath(settings.chroma_persist_directory)}")
+            self.client = _SHARED_PERSISTENT_CLIENT
 
         self.collection = self.client.get_or_create_collection(name=self.collection_name)
 
@@ -73,11 +102,12 @@ class ResearchVectorStore:
         text: str,
         competitor: str,
         dimension: str,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        source_engine: str = "tavily"
     ) -> int:
         """
-        Chunks and indexes scraped text into the Chroma collection.
-        Returns the number of chunks added.
+        Chunks and upserts scraped text into the Chroma collection with content-hash deduplication.
+        Returns the number of unique chunks indexed.
         """
         chunks = chunk_text(text)
         if not chunks:
@@ -86,9 +116,16 @@ class ResearchVectorStore:
         ids: List[str] = []
         documents: List[str] = []
         metadatas: List[Dict[str, Any]] = []
+        seen_ids = set()
+        valid_engine = source_engine if source_engine in ("google_grounding", "tavily", "duckduckgo") else "tavily"
 
         for i, chunk in enumerate(chunks):
-            chunk_id = f"{uuid.uuid4().hex[:8]}_{i}"
+            content_hash = hashlib.md5(f"{url}:{chunk}".encode("utf-8")).hexdigest()[:16]
+            chunk_id = f"chk_{content_hash}"
+            if chunk_id in seen_ids:
+                continue
+            seen_ids.add(chunk_id)
+
             ids.append(chunk_id)
             documents.append(chunk)
             metadatas.append({
@@ -96,16 +133,117 @@ class ResearchVectorStore:
                 "title": title or "Scraped Document",
                 "competitor": competitor,
                 "dimension": dimension,
+                "source_engine": valid_engine,
                 "chunk_index": i
             })
 
-        self.collection.add(
-            ids=ids,
-            documents=documents,
-            metadatas=metadatas
+        if ids:
+            self.collection.upsert(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas
+            )
+            logger.info(f"Indexed {len(ids)} unique chunks from {url} for {competitor} [{dimension}]")
+        return len(ids)
+
+    def get_cached_evidence(
+        self,
+        competitor: str,
+        dimension: str,
+        query_text: str,
+        n_results: int = 3
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """
+        Smart Vector Cache lookup: checks if ChromaDB already holds verified chunks for (competitor, dimension).
+        First checks the current topic collection; if missing and persistent mode is active, scans existing
+        collections in `./chroma_data` and syncs matching chunks into the current collection.
+        Returns (cached_facts, cached_citation_dicts) or ([], []) on cache miss.
+        """
+        where_filter: Dict[str, Any] = {
+            "$and": [
+                {"competitor": competitor},
+                {"dimension": dimension}
+            ]
+        }
+
+        matched_docs: List[str] = []
+        matched_metas: List[Dict[str, Any]] = []
+
+        try:
+            if self.collection.count() > 0:
+                existing = self.collection.get(where=where_filter)
+                matched_docs = existing.get("documents") or []
+                matched_metas = existing.get("metadatas") or []
+
+            # Cross-collection Smart Cache lookup across previous persistent research sessions
+            if not matched_docs and not self.in_memory:
+                for col_ref in self.client.list_collections():
+                    col_name = col_ref if isinstance(col_ref, str) else getattr(col_ref, "name", str(col_ref))
+                    if col_name == self.collection_name:
+                        continue
+                    try:
+                        other_col = self.client.get_collection(name=col_name)
+                        if other_col.count() == 0:
+                            continue
+                        found = other_col.get(where=where_filter)
+                        found_docs = found.get("documents") or []
+                        found_ids = found.get("ids") or []
+                        found_metas = found.get("metadatas") or []
+                        if found_docs and found_ids:
+                            self.collection.upsert(
+                                ids=found_ids,
+                                documents=found_docs,
+                                metadatas=found_metas
+                            )
+                            matched_docs = found_docs
+                            matched_metas = found_metas
+                            logger.info(
+                                f"[Smart Vector Cache] Migrated {len(found_ids)} cached chunks for "
+                                f"{competitor} [{dimension}] from collection '{col_name}'"
+                            )
+                            break
+                    except Exception as inner_exc:
+                        logger.debug(f"Skipped collection {col_name} during cache scan: {inner_exc}")
+        except Exception as exc:
+            logger.warning(f"[Smart Vector Cache] Lookup error for {competitor} [{dimension}]: {exc}")
+            return [], []
+
+        if not matched_docs:
+            return [], []
+
+        ranked_chunks = self.query(
+            query_text=query_text,
+            n_results=min(n_results, len(matched_docs)),
+            where_filter=where_filter
         )
-        logger.info(f"Indexed {len(chunks)} chunks from {url} for {competitor} [{dimension}]")
-        return len(chunks)
+        facts: List[str] = [
+            chunk["content"][:750]
+            for chunk in ranked_chunks
+            if chunk.get("content")
+        ]
+        if not facts:
+            facts = [doc[:750] for doc in matched_docs[:n_results] if doc]
+
+        citations: List[Dict[str, Any]] = []
+        seen_urls = set()
+        for doc, meta in zip(matched_docs, matched_metas):
+            meta_dict = meta or {}
+            url = meta_dict.get("url", "")
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            raw_engine = meta_dict.get("source_engine", "tavily")
+            valid_engine = raw_engine if raw_engine in ("google_grounding", "tavily", "duckduckgo") else "tavily"
+            citations.append({
+                "url": url,
+                "title": meta_dict.get("title") or "Cached Document",
+                "snippet": (doc or "")[:320],
+                "source_engine": valid_engine,
+                "competitor": competitor,
+                "dimension": dimension
+            })
+
+        return (facts, citations) if (facts and citations) else ([], [])
 
     def query(
         self,

@@ -38,6 +38,14 @@ class SourceCitation(BaseModel):
     source_engine: Literal["google_grounding", "tavily", "duckduckgo"] = Field(
         description="Search engine tool that retrieved this source"
     )
+    competitor: Optional[str] = Field(
+        default=None,
+        description="Specific competitor this source belongs to (e.g., Supabase, Firebase, Neon)"
+    )
+    dimension: Optional[str] = Field(
+        default=None,
+        description="Research subtask dimension this source supports (product_features, pricing_model, user_sentiment, go_to_market)"
+    )
     retrieved_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
@@ -78,12 +86,17 @@ class SWOTAnalysis(BaseModel):
 class CompetitorProfile(BaseModel):
     """Deep-dive profile of an individual competitor."""
     name: str = Field(description="Competitor name")
+    website: Optional[str] = Field(default=None, description="Official website URL")
     tagline: str = Field(description="Short description / value proposition")
     pricing_summary: str = Field(description="Pricing breakdown (tiers, free tier, enterprise pricing)")
+    user_sentiment: Optional[str] = Field(
+        default=None,
+        description="Summary of real user sentiment, community reputation, developer/customer satisfaction, and common feedback"
+    )
     key_features: List[str] = Field(description="Standout features and capabilities")
     pros: List[str] = Field(description="What users and analysts praise")
     cons: List[str] = Field(description="Common complaints or limitations")
-    market_positioning: str = Field(description="Target audience (e.g., solo developers, enterprise, mid-market)")
+    market_positioning: str = Field(description="Target audience and go-to-market positioning (e.g., solo developers, enterprise, mid-market)")
 
 
 class CompetitorReport(BaseModel):
@@ -99,4 +112,6 @@ class CompetitorReport(BaseModel):
     verified_citations: List[SourceCitation] = Field(description="Curated list of verified sources used in the report")
     confidence_score: Optional[float] = Field(default=None, description="Audited confidence score from Fact-Checker")
     audit_status: Optional[Literal["verified", "partial_evidence"]] = Field(default="verified", description="Audit status based on confidence threshold")
+    audit_critique: Optional[str] = Field(default=None, description="Specific auditor explanation of the confidence score and evidence quality")
+    missing_data_points: List[str] = Field(default_factory=list, description="Specific missing or unverified data points per competitor")
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))

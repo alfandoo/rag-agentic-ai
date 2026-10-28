@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Container matching Navbar Logo -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bgGrad)" stroke="#3f3f46" stroke-width="2.5"/>
+  <!-- Centered Emerald CPU Icon -->
+  <g transform="translate(12.8, 12.8) scale(1.6)">
+    <!-- Outer CPU Chip Frame -->
+    <rect x="4" y="4" width="16" height="16" rx="2" fill="#09090b" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Inner Core -->
+    <rect x="9" y="9" width="6" height="6" rx="1" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <!-- CPU Connection Pins -->
+    <path d="M15 2v2 M15 20v2 M2 15h2 M2 9h2 M20 15h2 M20 9h2 M9 2v2 M9 20v2" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

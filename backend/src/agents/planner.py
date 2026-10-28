@@ -1,7 +1,8 @@
 import logging
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
 from backend.src.models.state import MarketResearchState
 from backend.src.models.schemas import ResearchPlan, CompetitorFocus, ResearchSubtask
 from backend.src.agents.llm import get_structured_llm
@@ -13,18 +14,19 @@ Your mission is to analyze the user's market inquiry and construct a rigorous, a
 
 Instructions:
 1. Identify 2 to 4 key competitors or primary market players based on the user's request.
+   - ALWAYS populate the `website` field for each competitor with their official root domain (e.g., "supabase.com", "firebase.google.com", "neon.tech", "stripe.com", "xendit.co").
 2. Formulate targeted subtasks covering these 4 core dimensions:
    - product_features: Core features, technical architecture, and differentiators.
-   - pricing_model: Specific pricing tiers, freemium limits, and enterprise pricing.
+   - pricing_model: Specific pricing tiers, freemium limits, and enterprise pricing from official pricing pages.
    - user_sentiment: Real user sentiment, customer complaints (from Reddit/G2/reviews), and praise.
    - go_to_market: Target customer segment and strategic positioning.
-3. For each subtask, generate 2-3 specific, high-intent search queries.
+3. For each subtask, generate 2-3 concise, high-intent English search queries (4-8 words max per query) that target official documentation/pricing pages as well as independent benchmarks.
 4. Formulate 2-3 clear hypotheses that the research should validate or refute.
-5. STRICT LANGUAGE RULE: {language_directive}
+5. STRICT LANGUAGE RULE: {language_directive} (Note: keep `search_queries` in English or target market terms so search engines return official product pages accurately).
 """
 
 
-def market_planner_node(state: MarketResearchState) -> Dict[str, Any]:
+def market_planner_node(state: MarketResearchState, config: Optional[RunnableConfig] = None) -> Dict[str, Any]:
     """
     Market Planner Agent Node in LangGraph.
     Translates raw research topic into a structured ResearchPlan in the requested language.
@@ -53,7 +55,7 @@ def market_planner_node(state: MarketResearchState) -> Dict[str, Any]:
             "topic": topic,
             "language": "Indonesian" if language == "id" else "English",
             "language_directive": language_directive
-        })
+        }, config=config)
     except Exception as exc:
         logger.error(f"[Planner Agent] LLM plan generation error: {exc}")
         import re

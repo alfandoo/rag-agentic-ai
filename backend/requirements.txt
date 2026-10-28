@@ -1,8 +1,10 @@
 # LangChain & Agent Orchestration
 langgraph>=0.2.20
-langchain-core>=0.3.0
+langchain-core>=1.0.0
 langchain-google-genai>=2.0.0
+langchain-groq>=0.2.0
 google-genai>=0.1.1
+groq>=0.11.0
 
 # Vector Database (RAG)
 chromadb>=0.5.5
@@ -25,7 +27,7 @@ sse-starlette>=2.1.3
 httpx>=0.27.0
 
 # Observability & Tracing
-langfuse>=2.50.0
+langfuse>=5.0.0
 
 # Testing
 pytest>=8.3.0

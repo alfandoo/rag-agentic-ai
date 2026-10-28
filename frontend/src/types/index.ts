@@ -25,6 +25,8 @@ export interface SourceCitation {
   title: string;
   snippet: string;
   source_engine: "google_grounding" | "tavily" | "duckduckgo";
+  competitor?: string;
+  dimension?: string;
   retrieved_at: string;
 }
 
@@ -46,8 +48,10 @@ export interface SWOTAnalysis {
 
 export interface CompetitorProfile {
   name: string;
+  website?: string;
   tagline: string;
   pricing_summary: string;
+  user_sentiment?: string;
   key_features: string[];
   pros: string[];
   cons: string[];
@@ -66,6 +70,8 @@ export interface CompetitorReport {
   verified_citations: SourceCitation[];
   confidence_score?: number;
   audit_status?: "verified" | "partial_evidence";
+  audit_critique?: string;
+  missing_data_points?: string[];
   generated_at: string;
 }
 
