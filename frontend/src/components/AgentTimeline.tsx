@@ -254,15 +254,16 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
               status === "completed"
                 ? 100
                 : status === "active"
-                ? Math.min(95, Math.max(4, Math.round((elapsedSeconds / targetSeconds) * 100)))
+                ? Math.min(100, Math.max(4, Math.round((elapsedSeconds / targetSeconds) * 100)))
                 : 0;
+            const overrunMs = Math.max(0, activeElapsed - targetSeconds * 1000);
             const timingLabel =
               status === "completed" && stageDurations[stage.id]
                 ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
                 : status === "active" && startedAt
                 ? remainingSeconds > 0
                   ? `${progress}% · ${t.pipeline.eta} ~${Math.ceil(remainingSeconds)}s`
-                  : `${progress}% · ${t.pipeline.finishing}`
+                  : `100% · +${formatDuration(overrunMs)} ${t.pipeline.overEta}`
                 : `${t.pipeline.eta} ${stage.eta}`;
 
             return (
@@ -270,7 +271,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                 key={stage.id}
                 className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all duration-300 relative overflow-hidden ${
                   status === "active"
-                    ? "bg-zinc-800/95 border-emerald-500/60 text-zinc-100 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30 animate-pulse-glow"
+                    ? "bg-zinc-800/95 border-emerald-500/60 text-zinc-100"
                     : status === "completed"
                     ? "bg-zinc-950/70 border-zinc-800 text-zinc-200"
                     : "bg-zinc-950/30 border-zinc-900 text-zinc-600"
@@ -315,7 +316,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                       status === "completed"
                         ? "bg-emerald-500"
                         : status === "active"
-                        ? "bg-emerald-400 animate-pulse"
+                        ? "bg-emerald-500"
                         : "bg-zinc-800"
                     }`}
                     style={{ width: `${progress}%` }}
