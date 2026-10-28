@@ -25,22 +25,29 @@ Progress streams to the browser over SSE. Reports export to Markdown and PDF.
 
 ```mermaid
 flowchart LR
-    UI[Next.js frontend] -->|SSE| API[FastAPI]
-    API --> Graph
+    UI["Next.js frontend<br/>(page.tsx, FollowUpChat)"] -->|"POST /api/research/stream (SSE)"| Mid["RateLimitMiddleware<br/>+ consume_research_budget"]
+    UI -->|"POST /api/research/chat"| Guard["check_topic_guardrail<br/>+ detect_language"]
+    Mid --> Routes["routes.py"]
+    Routes --> Graph
+    Guard --> Chat["Chat LLM"]
 
-    subgraph Graph [LangGraph workflow]
-        P[Planner] --> R[Researcher]
-        R --> F{Fact-checker}
-        F -->|score < 80%| R
-        F -->|score >= 80%| W[Writer]
+    subgraph Graph ["LangGraph StateGraph (workflow.py)"]
+        Planner["planner"] --> Researcher["researcher"]
+        Researcher --> FC{"fact_checker<br/>score ≥ 80%?"}
+        FC -->|"no, iterations left"| Researcher
+        FC -->|yes| Writer["writer"]
     end
 
-    R --> Search[Google / Tavily / DuckDuckGo]
-    R --> Scrape[Scraper]
-    Scrape --> Chroma[(ChromaDB)]
-    Chroma --> R
-    Graph --> LLM[Gemini, failover to Groq]
-    API -.-> Langfuse[Langfuse, optional]
+    Researcher --> Search["TriSearchEngine<br/>Google → Tavily → DDG"]
+    Researcher --> Scraper["scrape_url_clean_text<br/>(blocks non-public URLs)"]
+    Scraper --> VS[("ResearchVectorStore<br/>ChromaDB, 700-char chunks")]
+    VS --> Researcher
+    VS --> FC
+    VS --> Writer
+    VS --> Chat
+
+    Planner & Researcher & FC & Writer --> LLM["get_structured_llm<br/>Gemini → Groq failover"]
+    Routes -.->|"/api/observability"| Langfuse[("Langfuse, optional")]
 ```
 
 ## Design decisions
