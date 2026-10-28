@@ -47,7 +47,8 @@ flowchart LR
     VS --> Chat
 
     Planner & Researcher & FC & Writer --> LLM["get_structured_llm<br/>Gemini → Groq failover"]
-    Routes -.->|"/api/observability"| Langfuse[("Langfuse, optional")]
+    Graph -->|traces| Langfuse[("Langfuse, self-hosted")]
+    Routes -->|metrics| Langfuse
 ```
 
 ## Design decisions
@@ -60,7 +61,7 @@ flowchart LR
 
 ## Stack
 
-Python 3.12, FastAPI, LangGraph, ChromaDB, Pydantic v2 · Next.js 16, TypeScript, Tailwind CSS · Gemini, Groq (GPT-OSS 120B) · Docker, Caddy · Langfuse (optional tracing)
+Python 3.12, FastAPI, LangGraph, ChromaDB, Pydantic v2 · Next.js 16, TypeScript, Tailwind CSS · Gemini, Groq (GPT-OSS 120B) · Docker, Caddy · Langfuse (self-hosted tracing and metrics)
 
 ## Run it
 
@@ -101,6 +102,7 @@ Key variables. The full list is in `backend/.env.example`.
 | `GEMINI_API_KEY` | — | Primary LLM (required) |
 | `GROQ_API_KEY` | — | Fallback LLM (required for failover) |
 | `TAVILY_API_KEY` | — | Optional search provider |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | — | Tracing keys for the self-hosted Langfuse (local and production) |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS origins |
 | `RESEARCH_RATE_LIMIT_PER_HOUR` | `5` | Research runs per IP per window |
 | `RESEARCH_RATE_LIMIT_PER_DAY` | `20` | Research runs per day, all IPs |
