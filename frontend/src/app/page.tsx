@@ -455,6 +455,14 @@ function HomeContent() {
         if (runStartedAtRef.current) {
           setElapsedMs(Date.now() - runStartedAtRef.current);
         }
+        setEvents([]);
+        setPlan(null);
+        setVerification(null);
+        setReport(null);
+        setCurrentNode(null);
+        setElapsedMs(0);
+        setStageStartedOffset({});
+        runStartedAtRef.current = null;
         const limitMessage =
           language === "id"
             ? "Batas riset tercapai (5 riset per 5 jam). Silakan coba lagi nanti."
@@ -467,16 +475,6 @@ function HomeContent() {
           .then((health) => {
             setIsLimitError(health.ok);
             setError(health.ok ? limitMessage : connectionMessage);
-            if (health.ok) {
-              setEvents([]);
-              setPlan(null);
-              setVerification(null);
-              setReport(null);
-              setCurrentNode(null);
-              setElapsedMs(0);
-              setStageStartedOffset({});
-              runStartedAtRef.current = null;
-            }
           })
           .catch(() => {
             setIsLimitError(false);
