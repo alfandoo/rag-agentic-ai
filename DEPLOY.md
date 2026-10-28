@@ -1,4 +1,4 @@
-# VPS Deployment (idcloudhost)
+# VPS Deployment 
 
 Target: one Ubuntu VPS, app and self-hosted Langfuse, HTTPS via Caddy.
 
