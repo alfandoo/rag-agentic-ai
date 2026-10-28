@@ -250,11 +250,11 @@ export default function ObservabilityPage() {
         </div>
 
         {/* Tab Navigation Bar */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-1.5 flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-none touch-pan-x">
+        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-1.5 flex flex-wrap items-center gap-1 sm:gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("telemetry")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap interactive-btn ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer flex-1 sm:flex-none justify-center whitespace-normal sm:whitespace-nowrap text-center interactive-btn ${
               activeTab === "telemetry"
                 ? "bg-zinc-800 text-sky-300 border border-sky-500/40 shadow-xs"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
@@ -267,7 +267,7 @@ export default function ObservabilityPage() {
           <button
             type="button"
             onClick={() => setActiveTab("langfuse")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap interactive-btn ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer flex-1 sm:flex-none justify-center whitespace-normal sm:whitespace-nowrap text-center interactive-btn ${
               activeTab === "langfuse"
                 ? "bg-zinc-800 text-sky-300 border border-sky-500/40 shadow-xs"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
@@ -280,7 +280,7 @@ export default function ObservabilityPage() {
           <button
             type="button"
             onClick={() => setActiveTab("inspector")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0 whitespace-nowrap interactive-btn ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer flex-1 sm:flex-none justify-center whitespace-normal sm:whitespace-nowrap text-center interactive-btn ${
               activeTab === "inspector"
                 ? "bg-zinc-800 text-sky-300 border border-sky-500/40 shadow-xs"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
