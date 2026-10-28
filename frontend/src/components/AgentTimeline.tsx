@@ -48,6 +48,17 @@ const STAGE_ETA_SECONDS: Record<string, number> = {
   writer: 10
 };
 
+const ETA_HISTORY_KEY = "stratagent.stageEtaSeconds";
+
+const readEtaHistory = (): Record<string, number> => {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(ETA_HISTORY_KEY) || "{}");
+  } catch {
+    return {};
+  }
+};
+
 export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   currentNode,
   events,
@@ -64,6 +75,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   const { language, t } = useLanguage();
   const [logsOpen, setLogsOpen] = useState<boolean | null>(null);
   const [blueprintOpen, setBlueprintOpen] = useState<boolean | null>(null);
+  const [stageEtaHistory] = useState<Record<string, number>>(readEtaHistory);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Derive auto-open/auto-collapse without setState inside effects
@@ -121,6 +133,15 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     return durations;
   }, [events]);
 
+  useEffect(() => {
+    if (!isComplete) return;
+    const next = { ...readEtaHistory() };
+    Object.entries(stageDurations).forEach(([node, ms]) => {
+      if (STAGE_ETA_SECONDS[node] && ms > 0) next[node] = Math.round(ms / 1000);
+    });
+    window.localStorage.setItem(ETA_HISTORY_KEY, JSON.stringify(next));
+  }, [isComplete, stageDurations]);
+
   const getStageStatus = (stageId: string, index: number) => {
     if (isComplete) return "completed";
     if (isStopped) {
@@ -137,21 +158,22 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     return "pending";
   };
 
-  const totalEtaMs = STAGES.reduce((total, stage, idx) => {
-    const status = getStageStatus(stage.id, idx);
-    if (status === "completed") return total;
+  const getStageEstimate = (stageId: string) =>
+    stageEtaHistory[stageId] ?? STAGE_ETA_SECONDS[stageId] ?? 1;
 
-    const target = STAGE_ETA_SECONDS[stage.id] || 1;
+  const getRemainingSeconds = (stageId: string, status: string, elapsedSec: number) => {
+    if (status === "completed") return 0;
+    const estimate = getStageEstimate(stageId);
+    if (status !== "active") return estimate;
+    return elapsedSec < estimate ? estimate - elapsedSec : Math.max(5, estimate * 0.2);
+  };
+
+  const totalRemainingSec = STAGES.reduce((total, stage, idx) => {
+    const status = getStageStatus(stage.id, idx);
     const offset = stageStartedOffset[stage.id];
-    const elapsed = offset !== undefined ? Math.max(0, elapsedMs - offset) / 1000 : 0;
-    const remaining =
-      status === "active" && offset !== undefined
-        ? elapsed < target
-          ? Math.max(1, target - elapsed)
-          : elapsed - target + 1
-        : target;
-    return total + remaining * 1000;
-  }, elapsedMs);
+    const elapsedSec = offset !== undefined ? Math.max(0, elapsedMs - offset) / 1000 : 0;
+    return total + getRemainingSeconds(stage.id, status, elapsedSec);
+  }, 0);
 
   const getNodeBadgeStyle = (node: string) => {
     switch (node.toLowerCase()) {
@@ -180,7 +202,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             </span>
             {!isComplete && !isStopped && (
               <span className="font-mono text-[10px] text-sky-300 bg-sky-950/40 px-2 py-0.5 rounded-md border border-sky-800/50">
-                {t.pipeline.eta}: ~{formatDuration(totalEtaMs)}
+                {t.pipeline.eta}: ~{formatDuration(totalRemainingSec * 1000)}
               </span>
             )}
             {isComplete ? (
@@ -254,19 +276,14 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             const status = getStageStatus(stage.id, idx);
             const startedAt = stageStartedOffset[stage.id] !== undefined;
             const activeElapsed = Math.max(0, elapsedMs - (stageStartedOffset[stage.id] || 0));
-            const targetSeconds = STAGE_ETA_SECONDS[stage.id] || 1;
+            const estimateSeconds = getStageEstimate(stage.id);
             const elapsedSeconds = activeElapsed / 1000;
-            const remainingSeconds =
-              status === "active" && startedAt
-                ? elapsedSeconds < targetSeconds
-                  ? Math.max(1, targetSeconds - elapsedSeconds)
-                  : elapsedSeconds - targetSeconds + 1
-                : targetSeconds;
+            const remainingSeconds = getRemainingSeconds(stage.id, status, startedAt ? elapsedSeconds : 0);
             const progress =
               status === "completed"
                 ? 100
                 : status === "active"
-                ? Math.min(100, Math.max(4, Math.round((elapsedSeconds / targetSeconds) * 100)))
+                ? Math.min(100, Math.max(4, Math.round((elapsedSeconds / estimateSeconds) * 100)))
                 : 0;
             const timingLabel =
               status === "completed" && stageDurations[stage.id]
