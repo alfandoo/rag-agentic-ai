@@ -138,11 +138,15 @@ class ResearchVectorStore:
             })
 
         if ids:
-            self.collection.upsert(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas
-            )
+            try:
+                self.collection.upsert(
+                    ids=ids,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+            except Exception as exc:
+                logger.warning(f"ChromaDB upsert skipped for {url} [{dimension}]: {exc}")
+                return 0
             logger.info(f"Indexed {len(ids)} unique chunks from {url} for {competitor} [{dimension}]")
         return len(ids)
 
@@ -236,7 +240,11 @@ class ResearchVectorStore:
         if where_filter:
             kwargs["where"] = where_filter
 
-        results = self.collection.query(**kwargs)
+        try:
+            results = self.collection.query(**kwargs)
+        except Exception as exc:
+            logger.warning(f"ChromaDB query skipped for '{query_text[:60]}': {exc}")
+            return []
 
         extracted: List[Dict[str, Any]] = []
         if results and "documents" in results and results["documents"]:
