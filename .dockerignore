@@ -1,0 +1,13 @@
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+.env
+.env.prod
+backend/.env
+backend/src/tools/.langfuse_metrics_cache.json
+backend/tests
+chroma_data
+frontend/node_modules
+frontend/.next
+frontend/.env*

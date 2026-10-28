@@ -1,7 +1,8 @@
 import socket
 
+from backend.src.agents.researcher import _is_citation_relevant_to_competitor
 from backend.src.agents.writer import FALLBACK_NOTICE, _build_fallback_report
-from backend.src.models.schemas import CompetitorFocus, ResearchPlan
+from backend.src.models.schemas import CompetitorFocus, ResearchPlan, SourceCitation
 from backend.src.tools.scraper import _is_public_url
 from backend.src.tools.vector_store import chunk_text
 
@@ -56,6 +57,20 @@ def test_scraper_blocks_non_public_urls(monkeypatch):
         lambda host, port: [(2, 1, 6, "", ("93.184.216.34", 0))]
     )
     assert _is_public_url("http://example.com") is True
+
+
+def test_citation_relevance_requires_word_boundary_and_context():
+    citation = SourceCitation(
+        url="https://example.com/neon-lights",
+        title="Neon lights guide",
+        snippet="How to build neon lights",
+        source_engine="duckduckgo"
+    )
+    assert _is_citation_relevant_to_competitor(citation, "Neon") is False
+
+    citation.title = "Neon serverless Postgres"
+    citation.snippet = "Neon is a serverless Postgres database"
+    assert _is_citation_relevant_to_competitor(citation, "Neon") is True
 
 
 def test_chunk_text_terminates_when_overlap_exceeds_size():

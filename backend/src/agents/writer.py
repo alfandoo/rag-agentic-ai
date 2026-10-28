@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -341,7 +341,7 @@ def executive_writer_node(state: MarketResearchState, config: Optional[RunnableC
         )
 
     # Always synchronize audit provenance and real system timestamp (never trust LLM-generated dates)
-    report.generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    report.generated_at = datetime.now(timezone.utc).isoformat()
 
     # Natural tone guardrail: Clean up any robotic hypothesis tags (e.g., "[H1]", "Hipotesis [H1] tervalidasi:")
     if report.executive_summary:
@@ -453,7 +453,7 @@ def executive_writer_node(state: MarketResearchState, config: Optional[RunnableC
         "node": "writer",
         "status": "completed",
         "message": event_msg,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "data": {
             "title": report.title,
             "profiles_count": len(report.competitor_profiles),

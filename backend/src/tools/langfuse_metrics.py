@@ -31,6 +31,7 @@ def _get_client():
         public_key=settings.langfuse_public_key,
         secret_key=settings.langfuse_secret_key,
         base_url=settings.langfuse_host,
+        timeout=60,
     )
 
 
@@ -105,11 +106,47 @@ def _collect(days: int) -> Dict[str, Any]:
         orderBy=[{"field": "p95_latency", "direction": "desc"}],
         config={"row_limit": 10}
     )
-    daily = q(metrics=[
-        {"measure": "count", "aggregation": "count"},
-        {"measure": "totalTokens", "aggregation": "sum"},
-        {"measure": "totalCost", "aggregation": "sum"},
-    ], timeDimension={"granularity": "day"}, orderBy=[{"field": "time_dimension", "direction": "asc"}])
+    granularity = "hour" if days <= 1 else "day"
+    timeline_raw = q(
+        metrics=[
+            {"measure": "count", "aggregation": "count"},
+            {"measure": "totalTokens", "aggregation": "sum"},
+            {"measure": "totalCost", "aggregation": "sum"},
+        ],
+        timeDimension={"granularity": granularity},
+        orderBy=[{"field": "time_dimension", "direction": "asc"}]
+    )
+
+    # Pad timeline continuous buckets so graphs have continuous, tidy bars (24h -> 24 bars, 7d -> 7 bars, 30d -> 30 bars)
+    timeline_buckets = []
+    if days <= 1:
+        raw_by_hour = {str(r.get("time_dimension", ""))[:13]: r for r in timeline_raw}
+        start_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)
+        for i in range(24):
+            slot_dt = start_hour + timedelta(hours=i)
+            key = slot_dt.strftime("%Y-%m-%dT%H")
+            matched = raw_by_hour.get(key, {})
+            timeline_buckets.append({
+                "date": slot_dt.strftime("%Y-%m-%dT%H:00:00Z"),
+                "label": slot_dt.strftime("%H:00"),
+                "observations": int(_num(matched.get("count_count"))),
+                "tokens": int(_num(matched.get("sum_totalTokens"))),
+                "cost_usd": round(_num(matched.get("sum_totalCost")), 6),
+            })
+    else:
+        raw_by_day = {str(r.get("time_dimension", ""))[:10]: r for r in timeline_raw}
+        start_day = (now - timedelta(days=days - 1)).date()
+        for i in range(days):
+            slot_d = start_day + timedelta(days=i)
+            key = slot_d.strftime("%Y-%m-%d")
+            matched = raw_by_day.get(key, {})
+            timeline_buckets.append({
+                "date": key,
+                "label": slot_d.strftime("%d %b") if days <= 7 else slot_d.strftime("%d"),
+                "observations": int(_num(matched.get("count_count"))),
+                "tokens": int(_num(matched.get("sum_totalTokens"))),
+                "cost_usd": round(_num(matched.get("sum_totalCost")), 6),
+            })
 
     t = totals[0] if totals else {}
     g = gen_totals[0] if gen_totals else {}
@@ -175,15 +212,8 @@ def _collect(days: int) -> Dict[str, Any]:
             for r in latency_percentiles_raw
             if r.get("name")
         ],
-        "daily": [
-            {
-                "date": str(r.get("time_dimension", ""))[:10],
-                "observations": int(_num(r.get("count_count"))),
-                "tokens": int(_num(r.get("sum_totalTokens"))),
-                "cost_usd": round(_num(r.get("sum_totalCost")), 6),
-            }
-            for r in daily
-        ],
+        "time_granularity": granularity,
+        "daily": timeline_buckets,
     }
 
 

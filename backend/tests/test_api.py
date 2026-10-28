@@ -6,6 +6,12 @@ from backend.src.config.settings import settings
 client = TestClient(app)
 
 
+class FakeLLM:
+    async def astream(self, messages):
+        for token in ("Mocked ", "answer."):
+            yield type("Chunk", (), {"content": token})()
+
+
 def test_root_endpoint():
     response = client.get("/")
     assert response.status_code == 200
@@ -72,7 +78,8 @@ def test_openai_compatible_models_endpoint():
     assert data["data"][0]["object"] == "model"
 
 
-def test_follow_up_chat_sync():
+def test_follow_up_chat_sync(monkeypatch):
+    monkeypatch.setattr("backend.src.api.routes.get_llm", lambda **kwargs: FakeLLM())
     payload = {
         "topic": "AI Code Editors",
         "report_context": "Cursor Pro is $20/month. GitHub Copilot is $10/month.",

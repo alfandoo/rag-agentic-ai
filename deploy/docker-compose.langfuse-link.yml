@@ -1,0 +1,13 @@
+# Optional overlay: lets the backend reach a self-hosted Langfuse stack.
+# Start Langfuse first, then:
+# docker compose --env-file .env.prod -f docker-compose.prod.yml -f deploy/docker-compose.langfuse-link.yml up -d --build
+services:
+  backend:
+    networks:
+      - default
+      - langfuse
+
+networks:
+  langfuse:
+    external: true
+    name: langfuse_default

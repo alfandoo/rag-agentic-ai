@@ -59,7 +59,14 @@ export interface LangfuseMetrics {
     p99_ms: number;
   }>;
   observation_types?: Array<{ type: string; count: number }>;
-  daily?: Array<{ date: string; observations: number; tokens: number; cost_usd: number }>;
+  time_granularity?: string;
+  daily?: Array<{
+    date: string;
+    label?: string;
+    observations: number;
+    tokens: number;
+    cost_usd: number;
+  }>;
 }
 
 const LABELS = {
@@ -93,7 +100,11 @@ const LABELS = {
     runs: "runs",
     avg: "avg",
     noRuns: "no runs yet",
-    daily: "Daily Activity",
+    daily: "Activity Timeline",
+    activityHourly: "Hourly Activity (Last 24 Hours)",
+    activity7d: "Daily Activity (Last 7 Days)",
+    activity30d: "Daily Activity (Last 30 Days)",
+    peak: "Peak",
     types: "Observation Types",
     noData: "No data in this window yet. Run a research query to generate telemetry.",
     updated: "Updated"
@@ -128,7 +139,11 @@ const LABELS = {
     runs: "eksekusi",
     avg: "rata-rata",
     noRuns: "belum ada eksekusi",
-    daily: "Aktivitas Harian",
+    daily: "Aktivitas Waktu",
+    activityHourly: "Aktivitas 24 Jam Terakhir (Per Jam)",
+    activity7d: "Aktivitas 7 Hari Terakhir",
+    activity30d: "Aktivitas 30 Hari Terakhir",
+    peak: "Puncak",
     types: "Tipe Observasi",
     noData: "Belum ada data pada rentang ini. Jalankan riset untuk menghasilkan telemetri.",
     updated: "Diperbarui"
@@ -146,11 +161,98 @@ const fmtInt = (n: number) => n.toLocaleString("en-US");
 const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : ms > 0 ? `${Math.round(ms)}ms` : "< 1ms");
 const fmtUsd = (v: number) => (v === 0 ? "$0" : v < 0.01 ? `$${v.toFixed(5)}` : `$${v.toFixed(3)}`);
 
+/** Extracts local hour label (e.g. "13:00") from an ISO UTC timestamp */
+const getLocalHourLabel = (isoDate: string): string => {
+  try {
+    const dt = new Date(isoDate);
+    if (isNaN(dt.getTime())) return "";
+    return `${String(dt.getHours()).padStart(2, "0")}:00`;
+  } catch {
+    return "";
+  }
+};
+
+/** Formats a bucket timestamp for the chart X-axis in the user's local timezone */
+const formatBucketTime = (
+  d: { date: string; label?: string },
+  windowDays: number,
+  language: string
+): string => {
+  if (!d.date) return d.label || "—";
+  try {
+    if (windowDays === 1) {
+      const h = getLocalHourLabel(d.date);
+      return h || d.label || d.date;
+    }
+    const parts = d.date.split("T")[0].split("-");
+    if (parts.length === 3) {
+      const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return dt.toLocaleDateString(language === "id" ? "id-ID" : "en-US", {
+        day: "numeric",
+        month: "short"
+      });
+    }
+    return d.label || d.date;
+  } catch {
+    return d.label || d.date;
+  }
+};
+
+/** Formats a bucket timestamp for the info strip in the user's local timezone */
+const formatBucketFullLabel = (
+  d: { date: string; label?: string } | undefined,
+  windowDays: number,
+  language: string
+): string => {
+  if (!d || !d.date) return "—";
+  try {
+    if (windowDays === 1) {
+      const dt = new Date(d.date);
+      if (isNaN(dt.getTime())) return d.date;
+      const dateStr = dt.toLocaleDateString(language === "id" ? "id-ID" : "en-US", {
+        day: "numeric",
+        month: "short"
+      });
+      const timeStr = `${String(dt.getHours()).padStart(2, "0")}:00`;
+      return `${dateStr}, ${timeStr}`;
+    }
+    const parts = d.date.split("T")[0].split("-");
+    if (parts.length === 3) {
+      const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return dt.toLocaleDateString(language === "id" ? "id-ID" : "en-US", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      });
+    }
+    return d.date;
+  } catch {
+    return d.date;
+  }
+};
+
+/** Returns the client browser's short timezone name (e.g. "WIB", "PST", "GMT+7") */
+const getTimezoneName = (language: string): string => {
+  try {
+    if (typeof Intl !== "undefined") {
+      const parts = new Intl.DateTimeFormat(language === "id" ? "id-ID" : "en-US", {
+        timeZoneName: "short"
+      }).formatToParts(new Date());
+      return parts.find((p) => p.type === "timeZoneName")?.value || "";
+    }
+  } catch {
+    // fallback
+  }
+  return "";
+};
+
 export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | string }) {
   const L = language === "id" ? LABELS.id : LABELS.en;
   const [days, setDays] = useState<number>(7);
   const [data, setData] = useState<LangfuseMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const load = useCallback(async (windowDays: number, refresh = false) => {
     setLoading(true);
@@ -172,8 +274,21 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
   }, [days, load]);
 
   const s = data?.summary;
-  const daily = (data?.daily || []).slice(-Math.min(days, 14));
+  const daily = data?.daily || [];
   const maxDaily = Math.max(1, ...daily.map((d) => d.observations));
+  const totalDailyObs = daily.reduce((acc, d) => acc + d.observations, 0);
+  const tz = getTimezoneName(language);
+  const activeItem =
+    hoveredIdx !== null && daily[hoveredIdx]
+      ? daily[hoveredIdx]
+      : daily.filter((d) => d.observations > 0).slice(-1)[0] || daily[daily.length - 1];
+  const isLatestRun =
+    hoveredIdx === null &&
+    activeItem &&
+    daily.filter((d) => d.observations > 0).slice(-1)[0] === activeItem &&
+    activeItem !== daily[daily.length - 1];
+  const isCurrentSlot =
+    hoveredIdx === null && activeItem === daily[daily.length - 1];
   const maxAgentP95 = Math.max(1, ...(data?.agents || []).map((a) => a.latency_p95_ms));
   const totalTypes = Math.max(1, (data?.observation_types || []).reduce((acc, x) => acc + x.count, 0));
 
@@ -295,27 +410,215 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
                 </div>
               </div>
 
-              {/* Daily activity */}
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-3">
-                <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                  {L.daily}
-                </span>
-                <div className="flex items-end gap-1 h-28">
-                  {daily.map((d) => (
-                    <div
-                      key={d.date}
-                      className="flex-1 flex flex-col items-center justify-end gap-1 h-full group"
-                      title={`${d.date}: ${d.observations} obs · ${fmtInt(d.tokens)} tok · ${fmtUsd(d.cost_usd)}`}
-                    >
-                      <div
-                        className={`w-full rounded-t ${d.observations > 0 ? "bg-emerald-500/80 group-hover:bg-emerald-400" : "bg-zinc-800"}`}
-                        style={{ height: `${d.observations > 0 ? Math.max(6, (d.observations / maxDaily) * 100) : 3}%` }}
-                      />
-                      <span className="text-[8px] font-mono text-zinc-600">{d.date.slice(8, 10)}</span>
+              {/* Activity Timeline Card */}
+              <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-3 flex flex-col justify-between">
+                {loading ? (
+                  <div className="space-y-3 animate-pulse">
+                    {/* Header Skeleton */}
+                    <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3.5 h-3.5 rounded bg-zinc-800" />
+                        <div className="h-3.5 w-36 rounded bg-zinc-800" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-16 rounded bg-zinc-800/60" />
+                        <div className="hidden sm:block h-4 w-16 rounded bg-zinc-800/60" />
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    {/* Direct-on-chart Info Strip Skeleton */}
+                    <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-800/80 min-h-[32px]">
+                      <div className="h-3 w-28 rounded bg-zinc-800/80" />
+                      <div className="h-3 w-36 rounded bg-zinc-800/70" />
+                    </div>
+
+                    {/* Bars Area Skeleton */}
+                    <div className="flex items-end h-28 pt-1">
+                      <div
+                        className={`w-full flex items-end h-full ${
+                          days === 7
+                            ? "justify-around max-w-sm mx-auto gap-2 sm:gap-3"
+                            : days === 1
+                            ? "justify-between gap-1"
+                            : "justify-between gap-0.5 sm:gap-1"
+                        }`}
+                      >
+                        {Array.from({ length: days === 1 ? 24 : days === 7 ? 7 : 30 }).map((_, i) => {
+                          const barWidthClass =
+                            days === 7
+                              ? "w-7 sm:w-8"
+                              : days === 1
+                              ? "flex-1 max-w-[14px]"
+                              : "flex-1 max-w-[9px]";
+                          const pattern = [55, 75, 35, 90, 45, 65, 80, 40, 70, 50, 85, 30];
+                          const heightPct = pattern[i % pattern.length];
+                          return (
+                            <div key={i} className={`flex flex-col items-center justify-end h-full ${barWidthClass}`}>
+                              <div className="h-4 flex items-center justify-center mb-0.5">
+                                <div className="h-2 w-3 rounded bg-zinc-800/60" />
+                              </div>
+                              <div className="w-full h-full rounded-t bg-zinc-800/30 flex flex-col justify-end overflow-hidden">
+                                <div
+                                  className="w-full rounded-t bg-zinc-800/80"
+                                  style={{ height: `${heightPct}%` }}
+                                />
+                              </div>
+                              <div className="h-4 flex items-center justify-center mt-1">
+                                <div className="h-2 w-3/4 rounded bg-zinc-800/50" />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2">
+                      <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                        {days === 1 ? L.activityHourly : days === 7 ? L.activity7d : L.activity30d}
+                      </span>
+                      <div className="flex items-center gap-2 font-mono text-[10px]">
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                          {L.peak}: <span className="text-emerald-400 font-semibold">{fmtInt(maxDaily)}</span>
+                        </span>
+                        <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                          Total: <span className="text-zinc-200 font-semibold">{fmtInt(totalDailyObs)}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Direct-on-chart Info Strip (Replaces Floating Tooltip) */}
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-800/80 font-mono text-[11px] min-h-[32px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-zinc-500">
+                          {language === "id"
+                            ? tz ? `Waktu (${tz}):` : "Waktu:"
+                            : tz ? `Time (${tz}):` : "Time:"}
+                        </span>
+                        <span className="font-semibold text-emerald-400">
+                          {formatBucketFullLabel(activeItem, days, language)}
+                        </span>
+                        {hoveredIdx !== null ? (
+                          <span className="text-[9px] font-sans uppercase px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
+                            {language === "id" ? "Dipilih" : "Active"}
+                          </span>
+                        ) : isLatestRun ? (
+                          <span className="text-[9px] font-sans uppercase px-1.5 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-800/50">
+                            {language === "id" ? "Aktivitas Terakhir" : "Latest Activity"}
+                          </span>
+                        ) : isCurrentSlot ? (
+                          <span className="text-[9px] font-sans uppercase px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/50">
+                            {language === "id" ? "Sekarang" : "Current"}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-2.5 text-zinc-300">
+                        <span>
+                          <strong className="text-zinc-100">{fmtInt(activeItem?.observations || 0)}</strong> obs
+                        </span>
+                        <span className="text-zinc-600">·</span>
+                        <span>
+                          <strong className="text-zinc-100">{fmtInt(activeItem?.tokens || 0)}</strong> tok
+                        </span>
+                        <span className="text-zinc-600">·</span>
+                        <span className="text-amber-300 font-semibold">
+                          {fmtUsd(activeItem?.cost_usd || 0)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bars Area */}
+                    <div className="flex items-end h-28 pt-1">
+                      <div
+                        className={`w-full flex items-end h-full ${
+                          days === 7
+                            ? "justify-around max-w-sm mx-auto gap-2 sm:gap-3"
+                            : days === 1
+                            ? "justify-between gap-1"
+                            : "justify-between gap-0.5 sm:gap-1"
+                        }`}
+                      >
+                        {daily.map((d, idx) => {
+                          const isHovered = hoveredIdx === idx;
+                          let showLabel = false;
+                          const labelText = formatBucketTime(d, days, language);
+                          if (days === 1) {
+                            showLabel = idx % 4 === 0 || idx === daily.length - 1;
+                          } else if (days === 7) {
+                            showLabel = true;
+                          } else {
+                            showLabel = idx % 5 === 0 || idx === daily.length - 1;
+                          }
+
+                          const barWidthClass =
+                            days === 7
+                              ? "w-7 sm:w-8"
+                              : days === 1
+                              ? "flex-1 max-w-[14px]"
+                              : "flex-1 max-w-[9px]";
+
+                          return (
+                            <div
+                              key={d.date}
+                              onMouseEnter={() => setHoveredIdx(idx)}
+                              onMouseLeave={() => setHoveredIdx(null)}
+                              className={`flex flex-col items-center justify-end h-full group relative cursor-pointer ${barWidthClass}`}
+                            >
+                              {/* Number directly displayed on top of the bar */}
+                              <div className="h-4 flex items-center justify-center mb-0.5 pointer-events-none">
+                                {days === 7 && d.observations > 0 ? (
+                                  <span
+                                    className={`text-[9px] font-mono transition-colors ${
+                                      isHovered ? "text-emerald-300 font-bold" : "text-zinc-400 font-medium"
+                                    }`}
+                                  >
+                                    {d.observations}
+                                  </span>
+                                ) : isHovered && d.observations > 0 ? (
+                                  <span className="text-[8px] font-mono text-emerald-300 font-bold whitespace-nowrap">
+                                    {d.observations}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {/* Bar silhouette & fill */}
+                              <div className={`w-full h-full rounded-t flex flex-col justify-end overflow-hidden transition-colors ${
+                                isHovered ? "bg-zinc-800/70" : "bg-zinc-800/30"
+                              }`}>
+                                <div
+                                  className={`w-full rounded-t transition-all duration-200 ${
+                                    d.observations > 0
+                                      ? isHovered
+                                        ? "bg-gradient-to-t from-emerald-500 to-teal-300 shadow-sm shadow-emerald-400/30"
+                                        : "bg-gradient-to-t from-emerald-600 to-emerald-400"
+                                      : "bg-transparent"
+                                  }`}
+                                  style={{
+                                    height: `${d.observations > 0 ? Math.max(8, (d.observations / maxDaily) * 100) : 0}%`
+                                  }}
+                                />
+                              </div>
+
+                              {/* X-axis label */}
+                              <div className="h-4 flex items-center justify-center mt-1 pointer-events-none">
+                                {(showLabel || isHovered) && (
+                                  <span className={`text-[8px] sm:text-[9px] font-mono select-none transition-colors whitespace-nowrap ${
+                                    isHovered ? "text-emerald-300 font-bold" : "text-zinc-500"
+                                  }`}>
+                                    {labelText}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Per-model table */}
@@ -416,7 +719,7 @@ export function LangfuseMetricsPanel({ language }: { language: "en" | "id" | str
 
           {data.generated_at && (
             <p className="text-[10px] font-mono text-zinc-600 text-right">
-              {L.updated}: {new Date(data.generated_at).toLocaleString()}
+              {L.updated}: {new Date(data.generated_at).toLocaleString(language === "id" ? "id-ID" : "en-US")}
             </p>
           )}
         </>

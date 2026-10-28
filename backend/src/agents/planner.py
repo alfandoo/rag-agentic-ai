@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -124,7 +124,7 @@ def market_planner_node(state: MarketResearchState, config: Optional[RunnableCon
         "node": "planner",
         "status": "completed",
         "message": event_msg,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "data": {
             "competitors": [c.name for c in plan.competitors],
             "subtask_count": len(plan.subtasks),

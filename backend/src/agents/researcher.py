@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from backend.src.models.state import MarketResearchState, is_topic_cancelled
 from backend.src.models.schemas import ExtractedEvidence, SourceCitation
@@ -67,18 +68,28 @@ def _is_citation_relevant_to_competitor(
     Prevents cross-competitor contamination when a fallback web search returns an article about a different competitor.
     """
     haystack = f"{citation.url} {citation.title} {citation.snippet}".lower()
+    text = f"{citation.title} {citation.snippet}".lower()
     c_lower = comp_name.strip().lower()
-
-    if c_lower in haystack:
-        return True
 
     if official_domain and official_domain.lower() in haystack:
         return True
 
-    # Check primary brand token (e.g., "github" or "copilot" for "GitHub Copilot")
+    # Multi-word names may match by all brand tokens (e.g., "GitHub Copilot")
     tokens = [t for t in c_lower.split() if len(t) >= 3]
-    if tokens and any(t in haystack for t in tokens):
+    if len(tokens) >= 2 and all(
+        re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", text)
+        for token in tokens
+    ):
         return True
+
+    # Single-word names need a market context; prevents "Neon" matching "neon lights"
+    if c_lower and re.search(rf"(?<![a-z0-9]){re.escape(c_lower)}(?![a-z0-9])", text):
+        market_terms = (
+            "database", "postgres", "pricing", "price", "plan", "feature", "review",
+            "cloud", "platform", "serverless", "subscription", "api", "performance",
+            "architecture", "cost", "tier"
+        )
+        return any(term in text for term in market_terms)
 
     return False
 
@@ -114,14 +125,6 @@ def intelligence_researcher_node(state: MarketResearchState) -> Dict[str, Any]:
         for comp in plan.competitors:
             competitor_domains[comp.name.lower()] = _resolve_competitor_domain(comp.name, comp.website)
             competitor_categories[comp.name.lower()] = comp.category or plan.market_domain or ""
-
-    # Map Planner's subtask search hints by (competitor_lower, dimension) or dimension
-    planner_hints: Dict[str, str] = {}
-    if plan and plan.subtasks:
-        for st in plan.subtasks:
-            dim = st.focus_dimension or "product_features"
-            if st.search_queries and dim not in planner_hints:
-                planner_hints[dim] = st.search_queries[0][:60]
 
     # List of tuples: (query, competitor_name, focus_dimension, target_domain, max_results)
     tasks_to_execute: List[Tuple[str, str, str, Optional[str], int]] = []
@@ -342,7 +345,7 @@ def intelligence_researcher_node(state: MarketResearchState) -> Dict[str, Any]:
         "node": "researcher",
         "status": "completed",
         "message": msg,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "data": {
             "queries_executed": queries_executed,
             "citations_found": len(new_citations),

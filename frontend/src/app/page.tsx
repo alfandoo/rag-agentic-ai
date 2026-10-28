@@ -9,6 +9,7 @@ import { AgentTimeline } from "@/components/AgentTimeline";
 import { ReportViewer } from "@/components/ReportViewer";
 import { FollowUpChat } from "@/components/FollowUpChat";
 import { API_BASE_URL } from "@/lib/config";
+import { VERIFIED_THRESHOLD } from "@/lib/constants";
 import {
   ResearchPlan,
   VerificationVerdict,
@@ -71,6 +72,9 @@ function HomeContent() {
       return () => clearTimeout(timer);
     }
   }, [report]);
+
+  // Close an active research stream when the page unmounts
+  useEffect(() => () => eventSourceRef.current?.close(), []);
 
   // Load saved dossiers from localStorage on client mount
   useEffect(() => {
@@ -137,7 +141,7 @@ function HomeContent() {
       setVerification({
         ...item.verification,
         confidence_score: finalScore,
-        is_valid: finalScore >= 75
+        is_valid: finalScore >= VERIFIED_THRESHOLD
       });
     } else {
       setVerification(item.verification);
@@ -344,7 +348,7 @@ function HomeContent() {
           const finalScore = repData.confidence_score;
           setVerification((prev) => {
             const updated: VerificationVerdict = {
-              is_valid: finalScore >= 75,
+              is_valid: finalScore >= VERIFIED_THRESHOLD,
               confidence_score: finalScore,
               critique: repData.audit_critique || prev?.critique || "",
               missing_aspects: repData.missing_data_points || prev?.missing_aspects || [],
@@ -389,12 +393,12 @@ function HomeContent() {
         setIsLoading(false);
         setError(
           language === "id"
-            ? `Tidak dapat terhubung ke backend FastAPI. Pastikan server aktif di ${API_BASE_URL} (jalankan 'python backend/run.py').`
-            : `Cannot connect to FastAPI backend. Ensure server is active at ${API_BASE_URL} (run 'python backend/run.py').`
+            ? `Tidak dapat terhubung ke backend atau batas riset tercapai. Coba lagi nanti (server: ${API_BASE_URL}).`
+            : `Cannot reach the backend or the research limit was reached. Try again later (server: ${API_BASE_URL}).`
         );
       });
-    } catch (err: any) {
-      setError(err?.message || "Failed to initialize EventSource stream.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to initialize EventSource stream.");
       setIsLoading(false);
     }
   };
@@ -483,7 +487,7 @@ function HomeContent() {
                     {itemScore !== undefined && (
                       <span
                         className={`text-[9px] px-1 py-0.2 rounded font-semibold ${
-                          itemScore >= 75
+                          itemScore >= VERIFIED_THRESHOLD
                             ? "bg-emerald-950/60 text-emerald-400"
                             : "bg-amber-950/60 text-amber-400"
                         }`}
@@ -588,6 +592,7 @@ function HomeContent() {
         {report && (
           <div className="animate-slide-up">
             <FollowUpChat
+              key={topic}
               topic={topic}
               reportSummary={reportContextString}
               competitorNames={report.competitor_profiles.map((p) => p.name)}

@@ -154,10 +154,9 @@ class ResearchVectorStore:
         n_results: int = 3
     ) -> Tuple[List[str], List[Dict[str, Any]]]:
         """
-        Smart Vector Cache lookup: checks if ChromaDB already holds verified chunks for (competitor, dimension).
-        First checks the current topic collection; if missing and persistent mode is active, scans existing
-        collections in `./chroma_data` and syncs matching chunks into the current collection.
-        Returns (cached_facts, cached_citation_dicts) or ([], []) on cache miss.
+        Smart Vector Cache lookup: checks if the current topic collection already holds verified
+        chunks for (competitor, dimension). Cross-topic reuse is intentionally disabled because
+        pricing and sentiment go stale. Returns (cached_facts, cached_citation_dicts) or ([], []).
         """
         where_filter: Dict[str, Any] = {
             "$and": [
@@ -174,36 +173,6 @@ class ResearchVectorStore:
                 existing = self.collection.get(where=where_filter)
                 matched_docs = existing.get("documents") or []
                 matched_metas = existing.get("metadatas") or []
-
-            # Cross-collection Smart Cache lookup across previous persistent research sessions
-            if not matched_docs and not self.in_memory:
-                for col_ref in self.client.list_collections():
-                    col_name = col_ref if isinstance(col_ref, str) else getattr(col_ref, "name", str(col_ref))
-                    if col_name == self.collection_name:
-                        continue
-                    try:
-                        other_col = self.client.get_collection(name=col_name)
-                        if other_col.count() == 0:
-                            continue
-                        found = other_col.get(where=where_filter)
-                        found_docs = found.get("documents") or []
-                        found_ids = found.get("ids") or []
-                        found_metas = found.get("metadatas") or []
-                        if found_docs and found_ids:
-                            self.collection.upsert(
-                                ids=found_ids,
-                                documents=found_docs,
-                                metadatas=found_metas
-                            )
-                            matched_docs = found_docs
-                            matched_metas = found_metas
-                            logger.info(
-                                f"[Smart Vector Cache] Migrated {len(found_ids)} cached chunks for "
-                                f"{competitor} [{dimension}] from collection '{col_name}'"
-                            )
-                            break
-                    except Exception as inner_exc:
-                        logger.debug(f"Skipped collection {col_name} during cache scan: {inner_exc}")
         except Exception as exc:
             logger.warning(f"[Smart Vector Cache] Lookup error for {competitor} [{dimension}]: {exc}")
             return [], []

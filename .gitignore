@@ -39,6 +39,7 @@ frontend/build/
 
 # Environment Secrets
 .env
+.env.prod
 backend/.env
 frontend/.env.local
 frontend/.env*.local

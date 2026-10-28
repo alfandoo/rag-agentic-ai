@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field
 
@@ -46,7 +46,7 @@ class SourceCitation(BaseModel):
         default=None,
         description="Research subtask dimension this source supports (product_features, pricing_model, user_sentiment, go_to_market)"
     )
-    retrieved_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    retrieved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ExtractedEvidence(BaseModel):
@@ -114,4 +114,4 @@ class CompetitorReport(BaseModel):
     audit_status: Optional[Literal["verified", "partial_evidence"]] = Field(default="verified", description="Audit status based on confidence threshold")
     audit_critique: Optional[str] = Field(default=None, description="Specific auditor explanation of the confidence score and evidence quality")
     missing_data_points: List[str] = Field(default_factory=list, description="Specific missing or unverified data points per competitor")
-    generated_at: str = Field(default_factory=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

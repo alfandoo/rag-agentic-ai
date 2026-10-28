@@ -35,6 +35,7 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const threadContainerRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Build context-aware prompt suggestions using actual competitors in the report
   const dynamicSuggestions = React.useMemo(() => {
@@ -58,10 +59,8 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
     return t.chat.suggestions;
   }, [competitorNames, language, t.chat.suggestions]);
 
-  // Reset conversation when user switches to a different research topic
-  useEffect(() => {
-    setMessages([]);
-  }, [topic]);
+  // Cancel an in-flight answer when the chat unmounts or the topic changes
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   // Only scroll inside the chat thread container when there are active messages
   useEffect(() => {
@@ -80,10 +79,9 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
     const textToSend = userText || input;
     if (!textToSend.trim() || isGenerating) return;
 
-    const newMessages: ChatMessage[] = [
-      ...messages,
-      { role: "user", content: textToSend.trim() }
-    ];
+    const userMessage: ChatMessage = { role: "user", content: textToSend.trim() };
+    const newMessages: ChatMessage[] = [...messages, userMessage];
+    const requestMessages: ChatMessage[] = [...messages.slice(-6), userMessage];
 
     setMessages(newMessages);
     setInput("");
@@ -92,6 +90,12 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
     // Placeholder for streaming assistant response
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
+    const replyParts: string[] = [];
+    let buffer = "";
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/research/chat/stream`, {
         method: "POST",
@@ -99,9 +103,10 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
         body: JSON.stringify({
           topic,
           report_context: reportSummary,
-          messages: newMessages,
+          messages: requestMessages,
           language
-        })
+        }),
+        signal: controller.signal
       });
 
       if (!response.ok || !response.body) {
@@ -110,38 +115,57 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
-      let assistantReply = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
+        for (const event of events) {
+          for (const line of event.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
             try {
-              const data = JSON.parse(line.replace("data: ", "").trim());
+              const data = JSON.parse(line.slice(6).trim());
               if (data.token) {
-                assistantReply += data.token;
+                replyParts.push(data.token);
+                const nextReply = replyParts.join("");
                 setMessages((prev) => {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     role: "assistant",
-                    content: assistantReply
+                    content: nextReply
                   };
                   return updated;
                 });
               }
             } catch {
-              // Ignore non-json lines
+              // Ignore malformed events; complete events still stream normally
             }
           }
         }
       }
     } catch {
-      // Fallback synchronous call
+      if (controller.signal.aborted) return;
+      const partialReply = replyParts.join("");
+      if (partialReply.trim()) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: "assistant",
+            content:
+              partialReply +
+              (language === "id"
+                ? "\n\n_[Jawaban terputus. Kirim ulang untuk melanjutkan.]_"
+                : "\n\n_[Response interrupted. Send again to continue.]_")
+          };
+          return updated;
+        });
+        return;
+      }
+      // Fallback synchronous call only when no tokens arrived
       try {
         const fallbackRes = await fetch(`${API_BASE_URL}/api/research/chat`, {
           method: "POST",
@@ -149,9 +173,10 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
           body: JSON.stringify({
             topic,
             report_context: reportSummary,
-            messages: newMessages,
+            messages: requestMessages,
             language
-          })
+          }),
+          signal: controller.signal
         });
         const fallbackData = await fallbackRes.json();
         setMessages((prev) => {
@@ -165,6 +190,7 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
           return updated;
         });
       } catch {
+        if (controller.signal.aborted) return;
         setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -179,6 +205,7 @@ export const FollowUpChat: React.FC<FollowUpChatProps> = ({
       }
     } finally {
       setIsGenerating(false);
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 

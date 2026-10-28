@@ -10,14 +10,10 @@ import {
   Database,
   ShieldCheck,
   RotateCcw,
-  CheckCircle2,
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Activity,
-  Terminal,
-  Search,
-  Globe
+  Terminal
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useLanguage } from "@/context/LanguageContext";

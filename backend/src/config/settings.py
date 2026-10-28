@@ -35,9 +35,15 @@ class Settings(BaseSettings):
     chroma_collection_name: str = Field(default="competitor_research", description="Default Chroma collection name")
 
     # Backend Server
-    backend_host: str = Field(default="0.0.0.0", description="API Host")
+    backend_host: str = Field(default="127.0.0.1", description="API Host (localhost only by default)")
     backend_port: int = Field(default=8000, description="API Port")
     allowed_origins: str = Field(default="http://localhost:3000", description="Comma-separated CORS origins")
+
+    # Abuse protection (in-memory, per process)
+    rate_limit_enabled: bool = Field(default=True, description="Enable research/chat rate limits")
+    research_rate_limit_per_hour: int = Field(default=2, description="Research starts per IP per hour")
+    research_rate_limit_per_day: int = Field(default=20, description="Research starts per day across all IPs")
+    chat_rate_limit_per_hour: int = Field(default=20, description="Chat requests per IP per hour")
 
     @property
     def cors_origins(self) -> List[str]:

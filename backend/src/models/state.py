@@ -42,12 +42,13 @@ def is_topic_cancelled(topic: str) -> bool:
 
 
 def update_citations(existing: List[SourceCitation], new: List[SourceCitation]) -> List[SourceCitation]:
-    """Reducer that appends citations while deduplicating by URL."""
-    existing_urls = {c.url for c in existing}
+    """Reducer that appends citations while deduplicating by URL, competitor, and dimension."""
+    existing_keys = {(c.url, c.competitor, c.dimension) for c in existing}
     result = list(existing)
     for c in new:
-        if c.url not in existing_urls:
-            existing_urls.add(c.url)
+        key = (c.url, c.competitor, c.dimension)
+        if key not in existing_keys:
+            existing_keys.add(key)
             result.append(c)
     return result
 

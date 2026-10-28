@@ -12,7 +12,6 @@ import {
   Link2,
   AlertTriangle,
   CheckCircle2,
-  Printer,
   Copy,
   Check,
   Search,
@@ -32,6 +31,7 @@ import {
 import { CompetitorReport } from "@/types";
 import { useLanguage } from "@/context/LanguageContext";
 import { downloadReportPdf } from "@/lib/pdfExporter";
+import { VERIFIED_THRESHOLD } from "@/lib/constants";
 
 interface ReportViewerProps {
   report: CompetitorReport;
@@ -57,8 +57,9 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
   }, []);
 
   // Align threshold with backend Fact-Checker (80%)
-  const isVerified = report.confidence_score === undefined || report.confidence_score >= 80;
-  const score = report.confidence_score !== undefined ? report.confidence_score : 80;
+  const isVerified =
+    report.confidence_score === undefined || report.confidence_score >= VERIFIED_THRESHOLD;
+  const score = report.confidence_score !== undefined ? report.confidence_score : VERIFIED_THRESHOLD;
 
   // Total SWOT insights mapped across all 4 quadrants
   const totalSwotInsights = useMemo(() => {
@@ -72,14 +73,6 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
       0
     );
   }, [report.swot_analyses]);
-
-  // Filtered SWOT cards
-  const filteredSwotList = useMemo(() => {
-    if (selectedSwotCompetitor === "all") return report.swot_analyses;
-    return report.swot_analyses.filter(
-      (s) => s.competitor.toLowerCase() === selectedSwotCompetitor.toLowerCase()
-    );
-  }, [report.swot_analyses, selectedSwotCompetitor]);
 
   // Distinct competitors present in citations or profiles
   const sourceCompetitorCounts = useMemo(() => {
@@ -242,7 +235,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
     const tagLabel = isId ? "Posisi / Slogan" : "Tagline";
     const priceLabel = isId ? "Model Harga" : "Pricing";
     const sentLabel = isId ? "Sentimen Pengguna" : "User Sentiment";
-    const sentDefault = isId ? "Adopsi pengguna & pengembang positif" : "Positive developer & user adoption";
+    const sentDefault = isId ? "Belum terverifikasi di sumber sitasi yang terindeks." : "Not verified in indexed sources.";
     const audLabel = isId ? "Segmen Target" : "Target Audience";
     const featLabel = isId ? "Fitur Utama" : "Key Features";
     const prosLabel = isId ? "Kelebihan" : "Pros";
@@ -374,6 +367,53 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
     }
     return children;
   };
+
+  const renderMatrixTable = (markdown: string) => (
+    <div className="overflow-x-auto touch-pan-x scrollbar-thin print:overflow-visible text-xs text-zinc-300 rounded-lg border border-zinc-800">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          table: ({ node, ...props }) => (
+            <table
+              className="w-full border-collapse text-left min-w-[540px] print:min-w-0"
+              {...props}
+            />
+          ),
+          thead: ({ node, ...props }) => (
+            <thead
+              className="bg-zinc-950 font-mono text-zinc-200 border-b border-zinc-800"
+              {...props}
+            />
+          ),
+          tbody: ({ node, ...props }) => (
+            <tbody className="divide-y divide-zinc-800/70" {...props} />
+          ),
+          tr: ({ node, ...props }) => (
+            <tr
+              className="even:bg-zinc-950/30 hover:bg-zinc-800/30 transition-colors"
+              {...props}
+            />
+          ),
+          th: ({ node, ...props }) => (
+            <th
+              className="px-3.5 py-3 text-[11px] font-semibold border-r border-zinc-800/80 last:border-r-0 first:sticky first:left-0 first:z-10 first:bg-zinc-950 print:static"
+              {...props}
+            />
+          ),
+          td: ({ node, children, ...props }) => (
+            <td
+              className="px-3.5 py-2.5 text-xs leading-relaxed border-r border-zinc-800/60 last:border-r-0 first:font-semibold first:text-zinc-100 first:bg-zinc-950/90 first:sticky first:left-0 first:z-10 print:static"
+              {...props}
+            >
+              {renderMatrixCellContent(children)}
+            </td>
+          )
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
+    </div>
+  );
 
   // Helper to highlight leading labels or key phrases in SWOT bullet points
   const renderSwotText = (text: string) => {
@@ -687,7 +727,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
             </h1>
             <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-zinc-600 mt-2">
               <span>
-                AUDIT: {isVerified ? "VERIFIED (100% GROUNDED)" : `PARTIAL (${score.toFixed(1)}%)`}
+                AUDIT: {isVerified ? `VERIFIED (${score.toFixed(1)}%)` : `PARTIAL (${score.toFixed(1)}%)`}
               </span>
               <span>•</span>
               <span>
@@ -923,50 +963,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
               <span>➡️</span>
             </div>
 
-            <div className="overflow-x-auto touch-pan-x scrollbar-thin print:overflow-visible text-xs text-zinc-300 rounded-lg border border-zinc-800">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  table: ({ node, ...props }) => (
-                    <table
-                      className="w-full border-collapse text-left min-w-[540px] print:min-w-0"
-                      {...props}
-                    />
-                  ),
-                  thead: ({ node, ...props }) => (
-                    <thead
-                      className="bg-zinc-950 font-mono text-zinc-200 border-b border-zinc-800"
-                      {...props}
-                    />
-                  ),
-                  tbody: ({ node, ...props }) => (
-                    <tbody className="divide-y divide-zinc-800/70" {...props} />
-                  ),
-                  tr: ({ node, ...props }) => (
-                    <tr
-                      className="even:bg-zinc-950/30 hover:bg-zinc-800/30 transition-colors"
-                      {...props}
-                    />
-                  ),
-                  th: ({ node, ...props }) => (
-                    <th
-                      className="px-3.5 py-3 text-[11px] font-semibold border-r border-zinc-800/80 last:border-r-0 first:sticky first:left-0 first:z-10 first:bg-zinc-950 print:static"
-                      {...props}
-                    />
-                  ),
-                  td: ({ node, children, ...props }) => (
-                    <td
-                      className="px-3.5 py-2.5 text-xs leading-relaxed border-r border-zinc-800/60 last:border-r-0 first:font-semibold first:text-zinc-100 first:bg-zinc-950/90 first:sticky first:left-0 first:z-10 print:static"
-                      {...props}
-                    >
-                      {renderMatrixCellContent(children)}
-                    </td>
-                  )
-                }}
-              >
-                {report.feature_matrix_markdown}
-              </ReactMarkdown>
-            </div>
+            {renderMatrixTable(report.feature_matrix_markdown)}
           </div>
 
           {/* Pricing Matrix */}
@@ -986,50 +983,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
               <span>➡️</span>
             </div>
 
-            <div className="overflow-x-auto touch-pan-x scrollbar-thin print:overflow-visible text-xs text-zinc-300 rounded-lg border border-zinc-800">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  table: ({ node, ...props }) => (
-                    <table
-                      className="w-full border-collapse text-left min-w-[540px] print:min-w-0"
-                      {...props}
-                    />
-                  ),
-                  thead: ({ node, ...props }) => (
-                    <thead
-                      className="bg-zinc-950 font-mono text-zinc-200 border-b border-zinc-800"
-                      {...props}
-                    />
-                  ),
-                  tbody: ({ node, ...props }) => (
-                    <tbody className="divide-y divide-zinc-800/70" {...props} />
-                  ),
-                  tr: ({ node, ...props }) => (
-                    <tr
-                      className="even:bg-zinc-950/30 hover:bg-zinc-800/30 transition-colors"
-                      {...props}
-                    />
-                  ),
-                  th: ({ node, ...props }) => (
-                    <th
-                      className="px-3.5 py-3 text-[11px] font-semibold border-r border-zinc-800/80 last:border-r-0 first:sticky first:left-0 first:z-10 first:bg-zinc-950 print:static"
-                      {...props}
-                    />
-                  ),
-                  td: ({ node, children, ...props }) => (
-                    <td
-                      className="px-3.5 py-2.5 text-xs leading-relaxed border-r border-zinc-800/60 last:border-r-0 first:font-semibold first:text-zinc-100 first:bg-zinc-950/90 first:sticky first:left-0 first:z-10 print:static"
-                      {...props}
-                    >
-                      {renderMatrixCellContent(children)}
-                    </td>
-                  )
-                }}
-              >
-                {report.pricing_matrix_markdown}
-              </ReactMarkdown>
-            </div>
+            {renderMatrixTable(report.pricing_matrix_markdown)}
           </div>
         </div>
 
@@ -1798,7 +1752,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
                                 title={c.snippet}
                                 className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2"
                               >
-                                "{c.snippet}"
+                                &ldquo;{c.snippet}&rdquo;
                               </p>
                             )}
                           </div>
@@ -1868,7 +1822,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ report }) => {
                         </p>
                         {c.snippet && (
                           <p className="text-[10px] leading-relaxed">
-                            "{c.snippet}"
+                            &ldquo;{c.snippet}&rdquo;
                           </p>
                         )}
                       </div>

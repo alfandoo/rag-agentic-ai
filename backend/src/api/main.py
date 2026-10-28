@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from backend.src.config.settings import settings
 from backend.src.api.routes import router
+from backend.src.api.rate_limit import RateLimitMiddleware
 
 # Configure logging format
 logging.basicConfig(
@@ -18,6 +19,13 @@ app = FastAPI(
     description="Production-grade Multi-Agent System powered by LangGraph, ChromaDB, Google Gemini, and Groq.",
     version="1.2.0"
 )
+
+if settings.rate_limit_enabled:
+    app.add_middleware(
+        RateLimitMiddleware,
+        research_per_hour=settings.research_rate_limit_per_hour,
+        chat_per_hour=settings.chat_rate_limit_per_hour,
+    )
 
 # Configure CORS for Next.js frontend communication
 app.add_middleware(

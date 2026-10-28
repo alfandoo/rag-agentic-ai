@@ -81,3 +81,26 @@ def test_update_citations_deduplication():
     assert len(merged) == 2
     assert merged[0].url == "https://cursor.com/pricing"
     assert merged[1].url == "https://github.com/features/copilot"
+
+
+def test_update_citations_keeps_same_url_for_different_competitor():
+    c1 = SourceCitation(
+        url="https://example.com/vs",
+        title="Comparison",
+        snippet="A and B compared",
+        source_engine="tavily",
+        competitor="A",
+        dimension="pricing_model"
+    )
+    c2 = SourceCitation(
+        url="https://example.com/vs",
+        title="Comparison",
+        snippet="A and B compared",
+        source_engine="tavily",
+        competitor="B",
+        dimension="pricing_model"
+    )
+
+    merged = update_citations([c1], [c2])
+    assert len(merged) == 2
+    assert {c.competitor for c in merged} == {"A", "B"}

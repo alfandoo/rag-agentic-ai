@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator, List, Literal, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -19,6 +19,7 @@ from backend.src.agents.guardrails import check_topic_guardrail, get_off_topic_r
 from backend.src.tools.vector_store import ResearchVectorStore
 from backend.src.tools.language import detect_language
 from backend.src.tools.langfuse_metrics import get_langfuse_metrics
+from backend.src.api.rate_limit import consume_research_budget
 from backend.src.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "market-intelligence-agent",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "fastapi_version": f"v{fastapi.__version__}",
         "python_runtime": f"Python {sys.version.split()[0]}",
         "providers": {
@@ -89,13 +90,15 @@ async def get_observability_telemetry():
     Returns comprehensive system telemetry, active agent instrumentation metrics,
     vector storage status, and latency SLIs for the LLMOps observability console.
     """
+    def _vector_stats():
+        store = ResearchVectorStore(in_memory=False)
+        collections = store.client.list_collections()
+        return len(collections), sum(c.count() for c in collections)
+
     vector_chunks_estimate = 0
     total_collections = 0
     try:
-        store = ResearchVectorStore(in_memory=False)
-        all_colls = store.client.list_collections()
-        total_collections = len(all_colls)
-        vector_chunks_estimate = sum(c.count() for c in all_colls)
+        total_collections, vector_chunks_estimate = await asyncio.to_thread(_vector_stats)
     except Exception as exc:
         logger.warning(f"ChromaDB telemetry count error: {exc}")
 
@@ -105,7 +108,7 @@ async def get_observability_telemetry():
     return {
         "status": "healthy",
         "service": "market-intelligence-agent",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "infrastructure": {
             "python_runtime": f"Python {sys.version.split()[0]}",
             "fastapi_version": f"v{fastapi.__version__}",
@@ -165,7 +168,7 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
                 if effective_language == "id"
                 else f"Market Intelligence Pipeline initialized for '{topic}' [{effective_language.upper()}]"
             ),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
     }
 
@@ -222,7 +225,7 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
                     if effective_language == "id"
                     else "Market Intelligence Report generation complete."
                 ),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
         }
         # Brief pause so browser EventSource can process 'complete' and close cleanly before server EOF
@@ -239,9 +242,19 @@ async def event_generator(topic: str, max_iterations: int, language: str = "en")
             "data": json.dumps({
                 "status": "error",
                 "message": str(exc),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
         }
+
+
+def _enforce_research_budget() -> None:
+    allowed, retry = consume_research_budget()
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Daily research limit reached. Please try again later.",
+            headers={"Retry-After": str(retry)},
+        )
 
 
 @router.get("/api/research/stream")
@@ -254,6 +267,7 @@ async def stream_research_get(
     GET endpoint for Server-Sent Events (SSE).
     Allows native EventSource API connections from browsers and Next.js frontend.
     """
+    _enforce_research_budget()
     return EventSourceResponse(
         event_generator(topic=topic, max_iterations=max_iterations, language=language),
         ping=15
@@ -265,6 +279,7 @@ async def stream_research_post(request: ResearchRequest):
     """
     POST endpoint for Server-Sent Events (SSE).
     """
+    _enforce_research_budget()
     return EventSourceResponse(
         event_generator(topic=request.topic, max_iterations=request.max_iterations, language=request.language),
         ping=15
@@ -293,6 +308,7 @@ async def run_research_sync(request: ResearchRequest):
     Synchronous execution endpoint. Runs the full LangGraph pipeline and returns
     the finalized structured report as a standard JSON response.
     """
+    _enforce_research_budget()
     effective_language = detect_language(request.topic, fallback_language=request.language)
     logger.info(f"[Run Sync] Topic: '{request.topic}' | UI Lang: '{request.language}' -> Resolved: '{effective_language}'")
 

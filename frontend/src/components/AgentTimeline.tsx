@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { ResearchPlan, StatusEvent, VerificationVerdict, CompetitorReport } from "@/types";
 import { useLanguage } from "@/context/LanguageContext";
+import { VERIFIED_THRESHOLD } from "@/lib/constants";
 
 interface AgentTimelineProps {
   currentNode: string | null;
@@ -171,7 +172,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
           {((verification !== null && verification !== undefined) || (report?.confidence_score !== undefined)) && (
             (() => {
               const effectiveScore = report?.confidence_score ?? verification?.confidence_score ?? 0;
-              const isVerified = effectiveScore >= 75;
+              const isVerified = effectiveScore >= VERIFIED_THRESHOLD;
               return (
                 <div className="flex items-center gap-2 font-mono text-[11px]">
                   <span className="text-zinc-500">{t.pipeline.confidence}</span>

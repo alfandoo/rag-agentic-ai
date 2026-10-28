@@ -9,7 +9,6 @@ import {
   Cpu,
   Search,
   Database,
-  Zap,
   Radio,
   RefreshCw,
   Copy,
@@ -504,7 +503,7 @@ export default function ObservabilityPage() {
                     <span className="text-sm font-bold font-mono text-emerald-400">
                       {latestSession.confidenceScore !== undefined
                         ? `${latestSession.confidenceScore.toFixed(1)}%`
-                        : "92.5%"}
+                        : "N/A"}
                     </span>
                   </div>
 

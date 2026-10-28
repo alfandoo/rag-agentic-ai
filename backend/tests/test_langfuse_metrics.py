@@ -23,7 +23,13 @@ def test_collect_counts_traces_as_root_observations(monkeypatch):
     data = langfuse_metrics._collect(days=7)
 
     assert data["summary"]["total_traces"] == 3
+    assert len(data["daily"]) == 7
+    assert data["time_granularity"] == "day"
     assert all(d["field"] != "traceId" for q in api.queries for d in q["dimensions"])
+
+    data_24h = langfuse_metrics._collect(days=1)
+    assert len(data_24h["daily"]) == 24
+    assert data_24h["time_granularity"] == "hour"
 
 
 def test_unreachable_langfuse_reports_disconnected(monkeypatch):

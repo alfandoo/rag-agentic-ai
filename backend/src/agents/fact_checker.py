@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -234,7 +234,7 @@ def fact_checker_node(state: MarketResearchState, config: Optional[RunnableConfi
         "node": "fact_checker",
         "status": "completed",
         "message": event_msg,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "data": {
             "is_valid": verdict.is_valid,
             "confidence_score": verdict.confidence_score,
