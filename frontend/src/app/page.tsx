@@ -96,6 +96,7 @@ function HomeContent() {
       const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- loading browser-only storage on mount
         if (Array.isArray(parsed)) setHistory(parsed.slice(0, 5));
       }
     } catch {
@@ -260,26 +261,22 @@ function HomeContent() {
       // Ignore network errors on stop signal
     });
 
-    // 3. Update UI state to stopped immediately (stops all spinners)
+    // 3. Return to the initial prompt screen
     setIsLoading(false);
     setIsComplete(false);
-    setIsStopped(true);
+    setIsStopped(false);
     setCurrentNode(null);
-    if (runStartedAtRef.current) {
-      setElapsedMs(Date.now() - runStartedAtRef.current);
-    }
-    setEvents((prev) => [
-      ...prev,
-      {
-        node: "system",
-        status: "stopped",
-        message:
-          language === "id"
-            ? "Eksekusi riset dihentikan oleh pengguna."
-            : "Research pipeline stopped by user.",
-        timestamp: new Date().toISOString()
-      }
-    ]);
+    setEvents([]);
+    setPlan(null);
+    setVerification(null);
+    setReport(null);
+    setIteration(1);
+    setError(null);
+    setTopic("");
+    setElapsedMs(0);
+    setStageStartedOffset({});
+    runStartedAtRef.current = null;
+    activeTopicRef.current = "";
   };
 
   const startResearch = (selectedTopic: string, maxIterations: number) => {
@@ -527,6 +524,7 @@ function HomeContent() {
         {/* Input Bar */}
         <div className="animate-slide-up">
           <TopicInput
+            key={topic}
             onSubmit={startResearch}
             onStop={stopResearch}
             isLoading={isLoading}

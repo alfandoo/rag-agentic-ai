@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Search,
   Loader2,
@@ -79,18 +79,12 @@ export const TopicInput: React.FC<TopicInputProps> = ({
   activeTopic
 }) => {
   const { language, t } = useLanguage();
-  const [topic, setTopic] = useState("");
+  const [topic, setTopic] = useState(activeTopic ?? "");
   const [maxIterations, setMaxIterations] = useState(2);
 
   const sampleTopics = React.useMemo(() => {
     return language === "id" ? SAMPLE_TOPICS_ID : SAMPLE_TOPICS_EN;
   }, [language]);
-
-  useEffect(() => {
-    if (activeTopic && activeTopic !== topic) {
-      setTopic(activeTopic);
-    }
-  }, [activeTopic]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

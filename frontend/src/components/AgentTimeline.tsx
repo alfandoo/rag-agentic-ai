@@ -43,9 +43,9 @@ const formatDuration = (ms: number): string => {
 
 const STAGE_ETA_SECONDS: Record<string, number> = {
   planner: 5,
-  researcher: 25,
+  researcher: 20,
   fact_checker: 5,
-  writer: 12
+  writer: 10
 };
 
 export const AgentTimeline: React.FC<AgentTimelineProps> = ({
@@ -137,6 +137,22 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     return "pending";
   };
 
+  const totalEtaMs = STAGES.reduce((total, stage, idx) => {
+    const status = getStageStatus(stage.id, idx);
+    if (status === "completed") return total;
+
+    const target = STAGE_ETA_SECONDS[stage.id] || 1;
+    const offset = stageStartedOffset[stage.id];
+    const elapsed = offset !== undefined ? Math.max(0, elapsedMs - offset) / 1000 : 0;
+    const remaining =
+      status === "active" && offset !== undefined
+        ? elapsed < target
+          ? Math.max(1, target - elapsed)
+          : elapsed - target + 1
+        : target;
+    return total + remaining * 1000;
+  }, elapsedMs);
+
   const getNodeBadgeStyle = (node: string) => {
     switch (node.toLowerCase()) {
       case "planner":
@@ -162,6 +178,11 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             <span className="font-mono text-[10px] text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded-md border border-zinc-800">
               {t.pipeline.totalTime}: {formatDuration(elapsedMs)}
             </span>
+            {!isComplete && !isStopped && (
+              <span className="font-mono text-[10px] text-sky-300 bg-sky-950/40 px-2 py-0.5 rounded-md border border-sky-800/50">
+                {t.pipeline.eta}: ~{formatDuration(totalEtaMs)}
+              </span>
+            )}
             {isComplete ? (
               <span className="flex items-center gap-1 font-mono text-[11px] text-emerald-400 bg-emerald-950/40 px-2.5 py-0.5 rounded-md border border-emerald-800/40">
                 <CheckCircle2 className="w-3 h-3" />
@@ -235,21 +256,23 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             const activeElapsed = Math.max(0, elapsedMs - (stageStartedOffset[stage.id] || 0));
             const targetSeconds = STAGE_ETA_SECONDS[stage.id] || 1;
             const elapsedSeconds = activeElapsed / 1000;
-            const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds);
+            const remainingSeconds =
+              status === "active" && startedAt
+                ? elapsedSeconds < targetSeconds
+                  ? Math.max(1, targetSeconds - elapsedSeconds)
+                  : elapsedSeconds - targetSeconds + 1
+                : targetSeconds;
             const progress =
               status === "completed"
                 ? 100
                 : status === "active"
                 ? Math.min(100, Math.max(4, Math.round((elapsedSeconds / targetSeconds) * 100)))
                 : 0;
-            const overrunMs = Math.max(0, activeElapsed - targetSeconds * 1000);
             const timingLabel =
               status === "completed" && stageDurations[stage.id]
                 ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
                 : status === "active" && startedAt
-                ? remainingSeconds > 0
-                  ? `${progress}% · ${t.pipeline.eta} ~${Math.ceil(remainingSeconds)}s`
-                  : `100% · +${formatDuration(overrunMs)} ${t.pipeline.overEta}`
+                ? `${progress}% · ${t.pipeline.eta} ~${Math.ceil(remainingSeconds)}s`
                 : `${t.pipeline.eta} ${stage.eta}`;
 
             return (
