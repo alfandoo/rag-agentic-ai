@@ -55,7 +55,7 @@ function HomeContent() {
   const [iteration, setIteration] = useState(1);
   const [history, setHistory] = useState<SavedDossier[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [stageStartedAt, setStageStartedAt] = useState<Record<string, number>>({});
+  const [stageStartedOffset, setStageStartedOffset] = useState<Record<string, number>>({});
 
   const runStartedAtRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -165,7 +165,7 @@ function HomeContent() {
     setError(null);
     setCurrentNode(null);
     setElapsedMs(0);
-    setStageStartedAt({});
+    setStageStartedOffset({});
     runStartedAtRef.current = null;
 
     // If plan was not saved in older history entries, synthesize it from competitor profiles
@@ -299,7 +299,7 @@ function HomeContent() {
     const startedAt = Date.now();
     runStartedAtRef.current = startedAt;
     setElapsedMs(0);
-    setStageStartedAt({ planner: startedAt });
+    setStageStartedOffset({ planner: 0 });
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -349,7 +349,10 @@ function HomeContent() {
         };
         const next = nextStage[statusData.node];
         if (next) {
-          setStageStartedAt((prev) => ({ ...prev, [next]: Date.now() }));
+          const offset = runStartedAtRef.current
+            ? Date.now() - runStartedAtRef.current
+            : 0;
+          setStageStartedOffset((prev) => ({ ...prev, [next]: offset }));
         }
         if (statusData.data?.iteration) {
           setIteration(statusData.data.iteration);
@@ -362,7 +365,10 @@ function HomeContent() {
         latestPlan = planData;
         setPlan(planData);
         setCurrentNode("researcher");
-        setStageStartedAt((prev) => ({ ...prev, researcher: Date.now() }));
+        const offset = runStartedAtRef.current
+          ? Date.now() - runStartedAtRef.current
+          : 0;
+        setStageStartedOffset((prev) => ({ ...prev, researcher: offset }));
       });
 
       es.addEventListener("verification", (e) => {
@@ -371,9 +377,12 @@ function HomeContent() {
         latestVerdict = verData;
         setVerification(verData);
         setCurrentNode(verData.is_valid ? "writer" : "researcher");
-        setStageStartedAt((prev) => ({
+        const offset = runStartedAtRef.current
+          ? Date.now() - runStartedAtRef.current
+          : 0;
+        setStageStartedOffset((prev) => ({
           ...prev,
-          [verData.is_valid ? "writer" : "researcher"]: Date.now()
+          [verData.is_valid ? "writer" : "researcher"]: offset
         }));
       });
 
@@ -384,7 +393,13 @@ function HomeContent() {
         hasReceivedReport = true;
         setReport(repData);
         setCurrentNode("writer");
-        setStageStartedAt((prev) => ({ ...prev, writer: prev.writer || Date.now() }));
+        const offset = runStartedAtRef.current
+          ? Date.now() - runStartedAtRef.current
+          : 0;
+        setStageStartedOffset((prev) => ({
+          ...prev,
+          writer: prev.writer ?? offset
+        }));
 
         // Sync verification confidence score with the final synthesized report score
         if (typeof repData.confidence_score === "number") {
@@ -603,7 +618,7 @@ function HomeContent() {
             onStop={stopResearch}
             report={report}
             elapsedMs={elapsedMs}
-            stageStartedAt={stageStartedAt}
+            stageStartedOffset={stageStartedOffset}
           />
         )}
 

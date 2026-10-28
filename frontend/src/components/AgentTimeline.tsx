@@ -31,7 +31,7 @@ interface AgentTimelineProps {
   onStop?: () => void;
   report?: CompetitorReport | null;
   elapsedMs?: number;
-  stageStartedAt?: Record<string, number>;
+  stageStartedOffset?: Record<string, number>;
 }
 
 const formatDuration = (ms: number): string => {
@@ -39,6 +39,13 @@ const formatDuration = (ms: number): string => {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${seconds % 60}s`;
+};
+
+const STAGE_ETA_SECONDS: Record<string, number> = {
+  planner: 5,
+  researcher: 25,
+  fact_checker: 5,
+  writer: 12
 };
 
 export const AgentTimeline: React.FC<AgentTimelineProps> = ({
@@ -52,7 +59,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   onStop,
   report,
   elapsedMs = 0,
-  stageStartedAt = {}
+  stageStartedOffset = {}
 }) => {
   const { language, t } = useLanguage();
   const [showLogs, setShowLogs] = useState(true);
@@ -238,8 +245,25 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
           {STAGES.map((stage, idx) => {
             const status = getStageStatus(stage.id, idx);
-            const startedAt = stageStartedAt[stage.id];
-            const activeElapsed = startedAt ? Date.now() - startedAt : 0;
+            const startedAt = stageStartedOffset[stage.id] !== undefined;
+            const activeElapsed = Math.max(0, elapsedMs - (stageStartedOffset[stage.id] || 0));
+            const targetSeconds = STAGE_ETA_SECONDS[stage.id] || 1;
+            const elapsedSeconds = activeElapsed / 1000;
+            const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds);
+            const progress =
+              status === "completed"
+                ? 100
+                : status === "active"
+                ? Math.min(95, Math.max(4, Math.round((elapsedSeconds / targetSeconds) * 100)))
+                : 0;
+            const timingLabel =
+              status === "completed" && stageDurations[stage.id]
+                ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
+                : status === "active" && startedAt
+                ? remainingSeconds > 0
+                  ? `${progress}% · ${t.pipeline.eta} ~${Math.ceil(remainingSeconds)}s`
+                  : `${progress}% · ${t.pipeline.finishing}`
+                : `${t.pipeline.eta} ${stage.eta}`;
 
             return (
               <div
@@ -283,12 +307,20 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                   {stage.role}
                 </p>
                 <p className="mt-1 font-mono text-[9px] text-zinc-500">
-                  {status === "completed" && stageDurations[stage.id]
-                    ? `${t.pipeline.actualTime} ${formatDuration(stageDurations[stage.id])}`
-                    : status === "active" && startedAt
-                    ? `${t.pipeline.eta} ${stage.eta} · ${t.pipeline.elapsed} ${formatDuration(activeElapsed)}`
-                    : `${t.pipeline.eta} ${stage.eta}`}
+                  {timingLabel}
                 </p>
+                <div className="mt-1.5 h-1 rounded-full bg-zinc-900 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      status === "completed"
+                        ? "bg-emerald-500"
+                        : status === "active"
+                        ? "bg-emerald-400 animate-pulse"
+                        : "bg-zinc-800"
+                    }`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
               </div>
             );
           })}

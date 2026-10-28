@@ -34,6 +34,7 @@ export interface Translations {
     eta: string;
     actualTime: string;
     elapsed: string;
+    finishing: string;
     traceTitle: string;
     eventsCount: string;
     emptyTrace: string;
@@ -294,6 +295,7 @@ export const translations: Record<Language, Translations> = {
       eta: "ETA",
       actualTime: "Done",
       elapsed: "Elapsed",
+      finishing: "Finishing...",
       traceTitle: "Execution Trace Log",
       eventsCount: "events",
       emptyTrace: "Awaiting pipeline execution...",
@@ -635,6 +637,7 @@ export const translations: Record<Language, Translations> = {
       eta: "ETA",
       actualTime: "Selesai",
       elapsed: "Berjalan",
+      finishing: "Menyelesaikan...",
       traceTitle: "Catatan Jejak Eksekusi Agen",
       eventsCount: "catatan",
       emptyTrace: "Menunggu eksekusi riset dimulai...",
