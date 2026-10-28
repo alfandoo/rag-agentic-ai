@@ -531,9 +531,7 @@ function HomeContent() {
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800/50 text-emerald-300 font-mono text-[10px] uppercase tracking-wider shadow-xs transition-transform duration-300 hover:scale-105">
             <Sparkles className="w-3 h-3 text-emerald-400" />
             <span>
-              {language === "id"
-                ? "Multi-Agent RAG • Closed-World Grounded"
-                : "Multi-Agent RAG • Closed-World Grounded"}
+              Multi-Agent RAG
             </span>
           </div>
           <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-zinc-100">
