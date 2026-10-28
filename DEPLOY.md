@@ -1,6 +1,6 @@
 # VPS Deployment (idcloudhost)
 
-Target: one Ubuntu VPS, app only, HTTPS via Caddy. Langfuse is optional.
+Target: one Ubuntu VPS, app and self-hosted Langfuse, HTTPS via Caddy.
 
 ## 1. VPS and DNS
 
@@ -63,7 +63,7 @@ git pull
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 ```
 
-## 7. Langfuse (optional)
+## 7. Langfuse
 
 Start the self-hosted stack first:
 
